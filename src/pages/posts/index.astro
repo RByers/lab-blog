@@ -1,40 +1,46 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getCollection } from 'astro:content';
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
 
-const allPosts = await getCollection('posts');
-const years = [...new Set(allPosts.map((post) => post.data.date.getFullYear()))].sort((a, b) => b - a);
+const allPosts = await getCollection("posts");
+const years = [
+  ...new Set(allPosts.map((post) => post.data.date.getFullYear())),
+].sort((a, b) => b - a);
 
 // Count posts per year
-const postsByYear = years.map(year => {
-    const count = allPosts.filter(p => p.data.date.getFullYear() === year).length;
-    return { year, count };
+const postsByYear = years.map((year) => {
+  const count = allPosts.filter(
+    (p) => p.data.date.getFullYear() === year,
+  ).length;
+  return { year, count };
 });
 ---
 
-<BaseLayout title="Archive">
-  <p>Historical log data from the lab.</p>
-  
+<BaseLayout title="Posts">
+  <p>Archive of my old posts from X/Twitter @RickByersLab</p>
+
   <div class="year-list">
-    {postsByYear.map(({ year, count }) => (
-      <div class="year-item">
-        <a href={`/posts/${year}`}>{year}</a>
-        <span class="count">({count} posts)</span>
-      </div>
-    ))}
+    {
+      postsByYear.map(({ year, count }) => (
+        <div class="year-item">
+          <a href={`/posts/${year}`}>{year}</a>
+          <span class="count">({count} posts)</span>
+        </div>
+      ))
+    }
   </div>
 
-  {allPosts.length === 0 && <p>No archives found (yet).</p>}
+  {allPosts.length === 0 && <p>No posts found (yet).</p>}
 
   <style>
-      .year-item {
-          font-size: 1.5rem;
-          margin-bottom: 1rem;
-      }
-      .count {
-          font-size: 1rem;
-          color: #666;
-          margin-left: 0.5rem;
-      }
+    .year-item {
+      font-size: 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .count {
+      font-size: 1rem;
+      color: #666;
+      margin-left: 0.5rem;
+    }
   </style>
 </BaseLayout>

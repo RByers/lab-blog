@@ -1,95 +1,156 @@
 ---
-import BaseLayout from '../layouts/BaseLayout.astro';
-import { Image } from 'astro:assets';
-import meImage from '../assets/me-viruses.png';
+import BaseLayout from "../layouts/BaseLayout.astro";
+import { Image } from "astro:assets";
+import meImage from "../assets/me-viruses.png";
 ---
 
 <BaseLayout title="About RByers Lab" showHeaderImage={false}>
   <div class="about-container">
-      <div class="about-text">
-          <p>
-            I am Rick Byers, a <a href="https://www.linkedin.com/in/rick-byers/">software engineer</a> by day and a
-            molecular biology enthusiast by night. I live in Waterloo, Canada.
-          </p>
-          <p>
-            I am fascinated by the flow of genetic information as viruses and bacteria move through us all.
-            In the future it will be trivial to closely observe this information flow, and that will revolutionalize our approach
-            to individual healthcare and public health. Through my home lab, I am trying to get a glimpse of what living
-            in that future will feel like. Through this blog and <a href="https://bsky.app/profile/lab.rbyers.ca">
-            my BlueSky social media account</a>, I aim to share what I am learning with you.
-          </p>
-          
-          <h3>Research Interests</h3>
-          <ul class="list">
-            <li>Detecting and quantifying viruses using RT-qPCR</li>
-            <li>Viral and bacterial genomics</li>
-            <li>Gene expression monitoring</li>
-            <li>Homebrew biology equipment</li>
-            <li>Personal genomics</li>
-            <li>AI-assisted computational biology</li>
-          </ul>
-          <h3>My primary lab equipment</h3>
-          <ul class="list">
-            <li><a href="https://biomeme.com/">Biomeme</a> Franklin 3-channel qPCR</li>
-            <li><a href="https://nanoporetech.com/">Oxford Nanopore</a> MinION sequencer</li>
-            <li><a href="https://minipcr.com/">MiniPCR</a> mini8 and mini16 PCR machines</li>
-            <li><a href="https://www.promega.ca/products/microplate-readers-fluorometers-luminometers/fluorometers/quantus-fluorometer/">
-              Promega Quantus fluorometer</a></li>
-            <li><a href="https://www.minipcr.com/product/gyro-microcentrifuge-variable-speed/">MiniPCR gyro plus centrifuge</a></li>
-            <li><a href="https://www.minipcr.com/products/bluegel/">MiniPCR BluGel</a> electrophoresis system</li>
-            <li><a href="https://www.pluslife.com/">Pluslife</a> molecular point of care test system</li>
-          </ul>
-          <h3>My Education</h3>
-          <ul class="list">
-            <li>Lots and lots of trial and error, reading papers and watching YouTube videos</li>
-            <li>Volunteer strategic advisor for COVID testing with <a href="https://staysafescreen.ca/">StaySafeScreen</a></li>
-            <li>Bachelors of Math in CS from the University of Waterloo</li>
-            <li>Masters of Science in CS from the University of Washington (with an emphasis in Computational Biology)</li>
-          </ul>
-          <h3>Blog source code <a href="https://github.com/Rbyers/lab-blog">on GitHub</a></h3>
-      </div>
+    <div class="about-text">
+      <p>
+        I am Rick Byers, a <a href="https://www.linkedin.com/in/rick-byers/"
+          >software engineer</a
+        > by day, and a molecular biology hobbyist on nights and weekends. I live
+        in Waterloo, Canada.
+      </p>
+      <p>
+        I am fascinated by the flow of genetic information as viruses and
+        bacteria move through populations. In the future it will be trivial to
+        closely observe this information flow, and that will revolutionalize our
+        approach to individual healthcare and public health. Through my home
+        molecular biology lab, I am trying to get a glimpse of what living in
+        that future will feel like. Through this blog and <a
+          href="https://bsky.app/profile/lab.rbyers.ca"
+          >my BlueSky social media account</a
+        >, I aim to share what I am learning with you.
+      </p>
 
-      <div class="about-image">
-          <Image 
-            src={meImage} 
-            alt="Rick Byers with viral structures" 
-            width={600}
-            quality="high"
-          />
-      </div>
+      <h3>Research Interests</h3>
+      <ul class="list">
+        <li>Detecting and quantifying viruses using RT-qPCR</li>
+        <li>Viral and bacterial genomics</li>
+        <li>Gene expression monitoring</li>
+        <li>Homebrew biology equipment</li>
+        <li>Personal genomics</li>
+        <li>AI-assisted computational biology</li>
+      </ul>
+      <h3>My primary lab equipment</h3>
+      <ul class="list">
+        <li>
+          <a href="https://biomeme.com/">Biomeme</a> Franklin 3-channel qPCR
+        </li>
+        <li>
+          <a href="https://nanoporetech.com/">Oxford Nanopore</a> MinION sequencer
+        </li>
+        <li>
+          <a href="https://minipcr.com/">MiniPCR</a> mini8 and mini16 PCR machines
+        </li>
+        <li>
+          <a
+            href="https://www.promega.ca/products/microplate-readers-fluorometers-luminometers/fluorometers/quantus-fluorometer/"
+          >
+            Promega Quantus fluorometer</a
+          >
+        </li>
+        <li>
+          <a
+            href="https://www.minipcr.com/product/gyro-microcentrifuge-variable-speed/"
+            >MiniPCR gyro plus centrifuge</a
+          >
+        </li>
+        <li>
+          <a href="https://www.minipcr.com/products/bluegel/">MiniPCR BluGel</a> electrophoresis
+          system
+        </li>
+        <li>
+          <a href="https://www.pluslife.com/">Pluslife</a> molecular point of care
+          test system
+        </li>
+      </ul>
+      <h3>My Education</h3>
+      <ul class="list">
+        <li>
+          Lots and lots of trial and error, reading papers and watching YouTube
+          videos
+        </li>
+        <li>
+          Volunteer strategic advisor for COVID testing with <a
+            href="https://staysafescreen.ca/">StaySafeScreen</a
+          >
+        </li>
+        <li>Bachelors of Math in CS from the University of Waterloo</li>
+        <li>
+          Masters of Science in CS from the University of Washington (with an
+          emphasis in Computational Biology)
+        </li>
+      </ul>
+      <h3>
+        Blog source code <a href="https://github.com/Rbyers/lab-blog"
+          >on GitHub</a
+        >
+      </h3>
+    </div>
+
+    <div class="about-image">
+      <figure>
+        <Image
+          src={meImage}
+          alt="Rick Byers holding a giant Coronavirus, Rhinovirus and Influenza virus. Generated by Gemini Nano Bananna AI."
+          width={600}
+          quality="high"
+        />
+        <figcaption>
+          Me holding a giant Coronavirus, Rhinovirus and Influenza virus (AI
+          modified).
+        </figcaption>
+      </figure>
+    </div>
   </div>
 
   <style>
+    .about-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3rem;
+      align-items: start;
+      margin-top: 2rem;
+    }
+
+    .about-image img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 8px; /* Optional: Soften corners slightly */
+      border: 1px solid #333;
+      box-shadow: 0 0 20px rgba(0, 255, 153, 0.1); /* Subtle glow */
+    }
+
+    /* Responsive: Stack on smaller screens */
+    @media (max-width: 768px) {
       .about-container {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 3rem;
-          align-items: start;
-          margin-top: 2rem;
+        grid-template-columns: 1fr;
       }
+      .about-image {
+        order: -1; /* Image first on mobile? Or leave as second. Let's keep it second for now or maybe first for visual impact. */
+        text-align: center;
+      }
+    }
 
-      .about-image img {
-          max-width: 100%;
-          height: auto;
-          border-radius: 8px; /* Optional: Soften corners slightly */
-          border: 1px solid #333;
-          box-shadow: 0 0 20px rgba(0, 255, 153, 0.1); /* Subtle glow */
-      }
+    .list {
+      line-height: 1.8;
+      color: #999;
+    }
 
-      /* Responsive: Stack on smaller screens */
-      @media (max-width: 768px) {
-          .about-container {
-              grid-template-columns: 1fr;
-          }
-           .about-image {
-               order: -1; /* Image first on mobile? Or leave as second. Let's keep it second for now or maybe first for visual impact. */
-               text-align: center;
-           }
-      }
+    /* Figure styling */
+    figure {
+      margin: 0;
+    }
 
-      .list {
-          line-height: 1.8;
-          color: #999;
-      }
+    figcaption {
+      font-size: 0.8rem;
+      color: #666;
+      text-align: center;
+      margin-top: 0.5rem;
+      font-style: italic;
+    }
   </style>
 </BaseLayout>
