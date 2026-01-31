@@ -1,5 +1,5 @@
 ---
-const { title } = Astro.props;
+const { title, showHeaderImage = true } = Astro.props;
 import { Image } from 'astro:assets';
 import labHeader from '../assets/lab-short.jpg';
 ---
@@ -54,7 +54,7 @@ import labHeader from '../assets/lab-short.jpg';
            object-fit: cover;
        }
 
-       main { max-width: 800px; margin: 3rem auto; padding: 0 1rem; min-height: 70vh; }
+       main { max-width: 1024px; margin: 3rem auto; padding: 0 1rem; min-height: 70vh; }
        h1, h2, h3 { color: #fff; font-weight: normal; margin-top: 2rem; }
        h1 { border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; margin-bottom: 2rem; font-size: 2rem; }
        footer { text-align: center; padding: 2rem; color: var(--dim-color); font-size: 0.8rem; border-top: 1px solid var(--border-color); margin-top: 4rem; }
@@ -74,13 +74,13 @@ import labHeader from '../assets/lab-short.jpg';
       </ul>
     </nav>
     
-    <Image 
+    {showHeaderImage && <Image 
         src={labHeader} 
         alt="RByers Lab Panoramic View" 
         class="header-image"
         widths={[640, 1024, 1920]}
         sizes="(max-width: 640px) 640px, (max-width: 1024px) 1024px, 1920px"
-    />
+    />}
 
     <main>
       <h1>{title}</h1>

@@ -1,10 +1,9 @@
-# Astro Starter Kit: Minimal
+# RByers Lab Blog
 
-```sh
-npm create astro@latest -- --template minimal
-```
+## Overview
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+This is the source for [RByers Lab](https://lab.rbyers.ca) blog.
+It is a static website built with [Astro](https://astro.build), [Google Antigravity](http://antigravity.google/) and Gemini.
 
 ## 🚀 Project Structure
 
@@ -38,6 +37,3 @@ All commands are run from the root of the project, from a terminal:
 | `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
 | `npm run astro -- --help` | Get help using the Astro CLI                     |
 
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).

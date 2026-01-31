@@ -6,8 +6,8 @@ const essays = await getCollection('essays');
 const sortedEssays = essays.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 ---
 
-<BaseLayout title="Essays">
-  <p>Welcome to the RByers Lab. Below are the latest long-form essays and notes from the basement.</p>
+<BaseLayout title="Home">
+  <p>Welcome to my home molecular virology lab. Below are my long-form essays.</p>
   
   {sortedEssays.map((essay) => (
     <article>
