@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+---
+
+<BaseLayout title="Search Repository">
+  <div class="search-container">
+      <p>Search indexing not yet active. (Requires build step)</p>
+      
+      <input type="text" id="search" placeholder="Type to search logs..." disabled />
+  </div>
+
+  <style>
+      input {
+          width: 100%;
+          padding: 1rem;
+          background: #222;
+          border: 1px solid #444;
+          color: #fff;
+          font-family: monospace;
+          font-size: 1.2rem;
+      }
+  </style>
+</BaseLayout>

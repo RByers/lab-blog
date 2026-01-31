@@ -1,0 +1,19 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+const essays = await getCollection('essays');
+const sortedEssays = essays.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+---
+
+<BaseLayout title="Essays">
+  <p>Welcome to the RByers Lab. Below are the latest long-form essays and notes from the basement.</p>
+  
+  {sortedEssays.map((essay) => (
+    <article>
+      <h2><a href={`/essays/${essay.slug}`}>{essay.data.title}</a></h2>
+      <p class="date">{essay.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      {essay.data.description && <p>{essay.data.description}</p>}
+    </article>
+  ))}
+</BaseLayout>

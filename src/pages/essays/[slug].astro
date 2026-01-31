@@ -1,0 +1,38 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { getCollection } from 'astro:content';
+
+export async function getStaticPaths() {
+  const essays = await getCollection('essays');
+  return essays.map(entry => ({
+    params: { slug: entry.slug },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await entry.render();
+---
+
+<BaseLayout title={entry.data.title}>
+  <header>
+    <p class="date">{entry.data.date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+  </header>
+
+  <div class="content">
+    <Content />
+  </div>
+
+  <div class="back-link">
+     <a href="/">&larr; Back to Lab Notes</a>
+  </div>
+
+  <style>
+      .content { 
+          font-size: 1.1rem; 
+          margin: 2rem 0; 
+          line-height: 1.8;
+      }
+      .back-link { margin-top: 3rem; border-top: 1px solid #333; padding-top: 1rem; }
+  </style>
+</BaseLayout>
