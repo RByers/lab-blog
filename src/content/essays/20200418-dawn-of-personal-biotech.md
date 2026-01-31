@@ -1,0 +1,75 @@
+---
+title: "The Dawn of Personal Biotech"
+date: 2020-04-18
+description: "My first post on doing PCR at home, right after the start of the COVID-19 pandemic."
+---
+
+[[Note: I originally posted this [to Medium](https://rickbyers.medium.com/the-dawn-of-personal-biotech-cb0af0d52e4c) near the start of the COVID-19 pandemic. This was before rapid antigen tests were broadly understood to be a viable testing tool for SARS-CoV-2.]]
+
+Molecular biology today is like computing was in the mid 1970s. By buying my own  [miniature qPCR machine](https://biomeme.com/)  I have just experienced the equivalent of using an  [Altair 8800](https://en.wikipedia.org/wiki/History_of_personal_computers#Altair_8800)  and I am hooked for life! Kit computers like the Altair 8800 took effort to use and were only interesting to a handful of enthusiasts, but they were the first broadly accessible computers and so marked the beginning of the personal computing revolution. Viral diagnostics technology has been on the precipice of being practical for the mass market for years. I predict that the COVID-19 pandemic will be the event that triggers a revolution in personal use healthcare biotech.
+
+![](https://miro.medium.com/v2/resize:fit:1280/1*evIjBE9Hu6mTnGnKkeugvA.jpeg)
+
+The Altair 8800 kit computer.  [Source: Ed Uthman](https://commons.wikimedia.org/wiki/File:Altair_8800,_Smithsonian_Museum.jpg)
+
+For  [8 years](https://groups.google.com/d/msg/diybio/0C_wbkruNWM/3oP3YRsNoX4J)  I had been wanting to buy equipment to study the viruses that flow through my household, but could not justify the investment of over $10,000. Now I was also hearing from healthcare and business leaders in my community about their difficulty in accessing critical testing. So early in March as part of a group effort to explore unconventional ideas to help my community respond to the pandemic (details saved for a future post), I personally purchased a “research use” qPCR machine from  [Biomeme](https://biomeme.com/)  with the necessary components to be able to do my own SARS-CoV-2 tests. Being licensed for “research use only”, I could be confident this equipment was not in demand for healthcare. That, along with my general incompetence, also means I need to be careful that nobody makes any healthcare decision based on a negative result from my device, since we could not know how common false negatives would be.
+
+![](https://miro.medium.com/v2/resize:fit:738/1*zpAdNah_xXRqqIRti_re5A.jpeg)
+
+The  [Biomeme Franklin](https://info.biomeme.com/mobile-qpcr-thermocyclers), a portable qPCR thermocycler for research use only
+
+My family was out of the country on a March break vacation when governments began asking citizens to limit travel for COVID-19. When we returned home (after braving pandemic-crazed airports), we of course strictly quarantined ourselves for 14 days. Some of us had a few cold-like symptoms, but nothing serious. When my qPCR machine arrived the day after our quarantine was officially over, we tested ourselves out of an abundance of caution and in the name of education. My kids and I loved doing the little bit of lab work for our samples, despite none of us having prior lab experience. I think I even managed to self-administer a nasopharyngeal swab to the right place. The rest of my family just swabbed their nostrils, which is much more comfortable and is  [reported to be nearly as effective](https://www.gatesfoundation.org/TheOptimist/Articles/coronavirus-interview-dan-wattendorf).
+
+![](https://miro.medium.com/v2/resize:fit:1280/1*CAlECeObE_8g0q2WFYPTsw.png)
+
+Self-administering a nasopharyngeal swab for home SARS-CoV-2 testing
+
+After collecting samples and purifying the RNA, we ran them in the Franklin device for about 45 minutes. Unsurprisingly, all of our tests came back negative. Now it’s easy to imagine that the next time any of us show symptoms of an infection we will all be jumping to try to figure out what virus we have.
+
+![](https://miro.medium.com/v2/resize:fit:1400/1*SpgWjxnPePyyL7XWr0bWZA.png)
+
+Biomeme results showing negative for the presence of SARS-CoV-2 RNA in our swabs (Red and Green), and the positive control added to verify we did the lab work correctly (Amber)
+
+The world depends on molecular biology, but it’s the domain of professionals in lab coats working with expensive machines in government, academic and big industrial labs. We know we are relying on these professionals, but generally are happy for them and their equipment to stay safely in their labs where most of us do not have to think about it. Sure there are some  [hobbyists](https://www.netflix.com/ca/title/80208910)  here and there, but they are on the sidelines, scrounging for parts where they can get them. Several big companies do a nice business selling expensive equipment in low volumes, whose prices you can’t even learn without “requesting a quote”. Generally it’s been a pretty stable situation for the medical diagnostics industry, until now.
+
+COVID-19 is highlighting some downsides to our centralized lab approach to viral diagnostics. Depending exclusively on large  [centralized](https://www.nytimes.com/2020/03/28/us/testing-coronavirus-pandemic.html)  labs can be fragile and slow, especially in  [countries](https://www.cbc.ca/news/health/covid-testing-shortages-1.5503926)  where labs have been optimized to have just about the capacity  [needed](https://www.cbc.ca/news/canada/toronto/ontario-covid-testing-coronavirus-1.5523601)  for the “important work”. Personal computing brought devices with gobs of spare CPU cycles into offices and homes everywhere, where it was usually “wasted”. Personal biotech will expand our whole notion of what molecular biology tasks are worth doing in the first place.
+
+The whole world is suddenly aware of the immense value of being able to detect specific viruses in our bodies. Is there any good reason why the scale of consumer electronics manufacturing won’t be brought to bear on viral diagnostics, leading to devices being as common in pharmacies, offices and eventually homes as, for example, laser printers are today?  After all, a qPCR machine isn’t fundamentally more complicated than a laser printer. It’s really  [not much more](https://pubs.acs.org/doi/10.1021/acs.analchem.7b04843#)  than a computer-controlled heater and fan, with some light sensors.
+
+The industry has been stuck in a local maxima where limited demand has kept medical diagnostics device prices high and consumer awareness low, resulting in limited demand. But this cycle is being broken by the desperate effort to rapidly expand COVID-19 testing capacity. In my home province of Ontario alone the government has  [placed an order](https://www.theglobeandmail.com/canada/article-health-canada-approves-new-rapid-covid-testing-kits/)  for 900,000 tests using the  [Spartan Cube qPCR machine](https://www.spartanbio.com/), and also provided a  [letter of intent](https://precisionbiomonitoring.com/media/news/)  to use technology from  [Precision Biomonitoring](http://precisionbiomonitoring.com/)  based on the  [Biomeme Franklin device](https://info.biomeme.com/mobile-qpcr-thermocyclers). The Spartan device is particularly interesting for future home use because it operates on a raw swab with no sample prep or other lab work at all. Every  [qPCR manufacturer](https://www.chaibio.com/coronavirus)  small and large has scrambled to offer their own SARS-CoV-2 testing solution. When demand finally starts to subside for all this built-up diagnostics device capacity, how will the market be permanently changed?
+
+![](https://miro.medium.com/v2/resize:fit:600/1*fh179tG8fkQ90WAihNUhcA.png)
+
+The  [Spartan Cube](https://www.spartanbio.com/technology/), a portable zero-lab-work qPCR machine now approved for use in Canada to help fight the COVID-19 pandemic
+
+It is now looking likely that  [a large fraction](https://science.sciencemag.org/content/early/2020/04/09/science.abb6936.full)  of SARS-CoV-2 spread  [comes from people who are asymptomatic](https://www.thelancet.com/journals/lancet/article/PIIS0140-6736(20)30917-X/fulltext). When we all begin to return to the workplace, some employers will want to give their employees the peace of mind of knowing that they are doing all they can to send infectious people home. Indeed after I wrote a first draft of this post,  [this article](https://www.theglobeandmail.com/canada/article-health-canada-approves-new-rapid-covid-testing-kits/)  was published including:
+
+> “Dr. Lem said Spartan Bioscience has been inundated with requests for tests in recent days. Private companies across Canada have reached out to secure tests. They want access to the tests so they can potentially screen employees for COVID-19 and allow non-infected individuals to return to work.”
+
+In addition, some people will want to exercise extra caution, and test themselves before visiting friends and family. Before long, the demand will drive increased supply, create more competition and improved technology, and ultimately lower prices. By that point many people will be able to test themselves for common viruses with maximum convenience and reasonable cost.
+
+Yes, of course there will be regulatory hurdles to figure out. The government plays an important role in protecting society from misleading or dangerous products, especially in the critical area of healthcare. Is there a compelling reason that a qPCR machine should be regulated much more stringently than, say, a digital thermometer? Both can be misused or misunderstood to make poor health decisions. With all that has happened, will society continue to accept the claim of health agencies and big healthcare companies that it’s in  _your_  best interest that they have control over access to information about what is in your own body? We could all have viral diagnostics devices in our home for a fraction of the economic cost of the COVID-19 pandemic, making us far better prepared for the next epidemic. Once that is clear, would we really choose, as a society, not to go down that path? There was great fear that personal genetic services like  [23andMe](https://23andme.com/)  would also cause great harm, but countries like  [Canada](https://www.macleans.ca/society/health/d-i-y-dna-genetic-testing-at-home/), who  [declined](https://www.theglobeandmail.com/life/health-and-fitness/health/genetic-self-testing-kits-to-come-to-canada/article20885678/)  to regulate the industry, have not yet seen much, if any, of the predicted negative consequences. [Update 7/10/20: Health Canada  [has now approved](https://www.newswire.ca/news-releases/health-canada-authorizes-precision-biomonitoring-to-import-and-sell-biomeme-s-sars-cov-2-real-time-rt-pcr-test-in-response-to-covid-19-869985862.html)  the use of the Biomeme Franklin in COVID-19 diagnostics].
+
+Of course, qPCR is just the most obvious beginning to this revolution. I’ve now also ordered my own  [miniature DNA sequencer](https://nanoporetech.com/products/minion)  in the hopes of being able to study the viruses in my body without needing probes identifying exactly what to look for in advance. That will be a story for a future post if and when I figure out how to put it to practical use.
+
+
+![](https://miro.medium.com/v2/resize:fit:1400/1*ag9AQWommDZ0A8Em-Ahuag.png)
+
+The  [Oxford Nanopore MinION](https://nanoporetech.com/products/minion), a portable low-cost DNA/RNA sequencer
+
+## Frequently Asked Questions
+
+**Q) Are NP swabs in high demand? Is it ethical for you to use one on yourself?**  
+This is a legitimate concern. I was working with a group to help get critical supplies to local healthcare, and when I heard NP swabs were 6+ weeks back-ordered, I ordered 1000 direct from a Chinese manufacturer as a proof of concept (they arrived in a week). However I did not get the UTM tubes, so I was told they were useless for healthcare purposes. After using the one on myself, I did eventually find a research lab who said they could use them, and so I donated 950, keeping 50 for the research I hoped to be involved in. It’s a legitimate criticism though that I donated only 95% of them, rather than all 100%.
+
+**Q) Will this article cause other reckless nerds like yourself to put undue demand on the supply chains which are so critical for public health?**
+I certainly hope not. Biomeme has now  [closed their online store](https://shop.biomeme.com/password)  due to excessive demand and to help them focus on maximizing their impact fighting the pandemic. So the overwhelming demand was already there, and I don’t believe I’m making it any worse.
+
+**Q) Is it unethical that privileged people like yourself are buying tests when vulnerable people like the homeless and those in long-term care homes are dying, in part, due to under-testing?**
+Yes, I think so. This is exactly why I’ve published this article now rather than doing the safe thing of waiting for the pandemic to be over. This inequity goes deeper and is more systemic than a few nerds ordering their own qPCR kits. Just look at the differences in access to testing between different countries. What is most likely to help eg. poor rural Cambodians contain the virus? The world needs a LOT more testing capacity than it has now. What sort of things might open the door to massive expansion? How can one viral diagnostics enthusiast help? I believe the real solution is not primarily better rationing to control demand. It’s better leveraging the free-market to increase competition and innovation, and ultimately lower prices and increase supply for everyone.
+
+**Q) Why are you not writing about what else you are doing with the tests?**  
+First, because I have had no concrete successes yet. All I have accomplished is to get 6 negative results (which could be false negatives for all I know), and it cost me about $20,000 to do so! Secondly because I am not a scientist or healthcare professional and so you should not see much value in any public health ideas I have. I am resisting the temptation to get totally carried away with hubris and arrogance as tech folks (myself included) so often do!
+
+**Q) Are you saying healthcare should be run by the free market?**
+Absolutely not! I am Canadian, and I love my socialized healthcare! In particular, I pay significantly more for healthcare (via taxes) than most Canadians despite getting exactly the same care, and that is exactly how I believe it should be! I just believe that effective socialized healthcare depends critically on a competitive and innovative free market. I imagine a future where, in many cases, it will make good economic sense for socialized healthcare systems to cover the cost of home virus test kits for all their citizens.
