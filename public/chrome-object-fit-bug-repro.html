@@ -75,8 +75,7 @@
       <h2>Steps to Reproduce:</h2>
       <ol>
         <li>Serve this page from a web server (not file://)</li>
-        <li>Open in Chrome with DevTools Network tab → disable cache and/or set throttling</li>
-        <li>Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)</li>
+        <li>Soft refresh (Cmd+R / Ctrl+R) up to 10 times</li>
         <li>Observe a brief "squashed" frame where the image appears at its natural aspect ratio before <code>object-fit: cover</code> is applied</li>
       </ol>
 
@@ -95,7 +94,7 @@
       <h2>Technical Details:</h2>
       <ul>
         <li>Image natural dimensions: 4023×1559 (aspect ratio ~2.58:1)</li>
-        <li>srcset provides multiple sizes: 640w, 1024w, 1920w</li>
+        <li>srcset provides multiple sizes: 640w, 1280w, 2560w</li>
         <li>Container height: 300px fixed</li>
         <li>Container width: 100% viewport</li>
         <li>The mismatch between HTML width/height attributes (original image) and selected srcset image dimensions may be relevant</li>
@@ -111,14 +110,6 @@
         <li>Fixed <code>height: 300px</code> instead of <code>max-height: 300px</code></li>
       </ul>
 
-      <h2>Hypothesis:</h2>
-      <p>
-        When srcset is used, Chrome may be calculating initial layout based on the
-        <code>width</code> and <code>height</code> attributes (4023×1559) but the
-        actually loaded image from srcset has different dimensions (e.g., 1920×744).
-        During the transition, <code>object-fit: cover</code> may not be correctly applied
-        for one paint frame.
-      </p>
     </div>
   </main>
 </body>
