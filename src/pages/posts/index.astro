@@ -3,21 +3,17 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import { getCollection } from "astro:content";
 
 const allPosts = await getCollection("posts");
-const years = [
-  ...new Set(allPosts.map((post) => post.data.date.getFullYear())),
-].sort((a, b) => b - a);
+const years = [...new Set(allPosts.map((post) => post.data.date.getFullYear()))].sort((a, b) => b - a);
 
 // Count posts per year
 const postsByYear = years.map((year) => {
-  const count = allPosts.filter(
-    (p) => p.data.date.getFullYear() === year,
-  ).length;
+  const count = allPosts.filter((p) => p.data.date.getFullYear() === year).length;
   return { year, count };
 });
 ---
 
 <BaseLayout title="Posts">
-  <p>Archive of my old posts from X/Twitter @RickByersLab</p>
+  <p>Archive of my old posts from X/Twitter @RickByersLab. For current social media, follow me on <a href="https://bsky.app/profile/lab.rbyers.ca">BlueSky</a></p>
 
   <div class="year-list">
     {

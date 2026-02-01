@@ -7,7 +7,7 @@ const sortedEssays = essays.sort((a, b) => b.data.date.valueOf() - a.data.date.v
 ---
 
 <BaseLayout title="Home">
-  <p>Welcome to my blog about my home molecular virology lab. Below are a few long-form essays. See also</p>
+  <p>Welcome to my blog about my home molecular virology lab. Below are my long-form essays. See also <a href="/posts/">posts</a> and <a href="/about/">about</a></p>
 
   {
     sortedEssays.map((essay) => (
