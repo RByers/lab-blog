@@ -69,9 +69,6 @@ nav ul {
   display: block;
   border-bottom: 1px solid var(--border-color);
   object-fit: cover;
-  /* Workaround for Chrome bug: tiny border-radius forces GPU rendering path
-     that properly applies object-fit before first paint */
-  border-radius: 0.1px;
 }
 
 /* Main Layout */
