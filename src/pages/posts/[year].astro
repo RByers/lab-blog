@@ -1,17 +1,17 @@
 ---
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import { getCollection } from 'astro:content';
+import BaseLayout from "../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
 
 export async function getStaticPaths() {
-  const allPosts = await getCollection('posts');
-  if (allPosts.length === 0) {
-      return []; // No posts yet
-  }
-  const years = [...new Set(allPosts.map((post) => post.data.date.getFullYear()))];
-  return years.map((year) => ({
-    params: { year: year.toString() },
-    props: { posts: allPosts.filter((post) => post.data.date.getFullYear() === year) },
-  }));
+    const allPosts = await getCollection("posts");
+    if (allPosts.length === 0) {
+        return []; // No posts yet
+    }
+    const years = [...new Set(allPosts.map((post) => post.data.date.getFullYear()))];
+    return years.map((year) => ({
+        params: { year: year.toString() },
+        props: { posts: allPosts.filter((post) => post.data.date.getFullYear() === year) },
+    }));
 }
 
 const { year } = Astro.params;
@@ -22,64 +22,69 @@ const sortedPosts = posts.sort((a, b) => b.data.date.valueOf() - a.data.date.val
 ---
 
 <BaseLayout title={`Archive: ${year}`}>
-  <div class="nav-back">
-      <a href="/posts">&larr; Back to Years</a>
-  </div>
-  
-  <div class="posts-feed">
-    {sortedPosts.map((post) => (
-      <article class="post-item">
-        <div class="post-meta">
-            <time datetime={post.data.date.toISOString()}>
-                {post.data.date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-            </time>
-        </div>
-        {post.data.title && <h3>{post.data.title}</h3>}
-        {post.data.image && (
-            <div class="post-image">
-                <img src={post.data.image} loading="lazy" alt="" />
-            </div>
-        )}
-        <div class="post-content">
-            {/* Ideally we would render content here, but we can't await entry.render() inside map easily without promises list. 
+    <div class="nav-back">
+        <a href="/posts">&larr; Back to Years</a>
+    </div>
+
+    <div class="posts-feed">
+        {
+            sortedPosts.map((post) => (
+                <article class="post-item">
+                    <div class="post-meta">
+                        <time datetime={post.data.date.toISOString()}>{post.data.date.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "UTC" })}</time>
+                    </div>
+                    {post.data.title && <h3>{post.data.title}</h3>}
+                    {post.data.image && (
+                        <div class="post-image">
+                            <img src={post.data.image} loading="lazy" alt="" />
+                        </div>
+                    )}
+                    <div class="post-content">
+                        {/* Ideally we would render content here, but we can't await entry.render() inside map easily without promises list. 
                 For now we link to it, or we could handle it. Let's link to individual post if clicked. 
             */}
-             <a href={`/posts/entry/${post.slug}`}>View Entry</a>
-        </div>
-      </article>
-    ))}
-  </div>
+                        <a href={`/posts/entry/${post.slug}`}>View Entry</a>
+                    </div>
+                </article>
+            ))
+        }
+    </div>
 
-  <style>
-      .nav-back { margin-bottom: 2rem; }
-      .post-item {
-          border-left: 2px solid #333;
-          padding-left: 1.5rem;
-          margin-bottom: 3rem;
-          position: relative;
-      }
-      .post-item::before {
-          content: '';
-          position: absolute;
-          left: -6px;
-          top: 0;
-          width: 10px;
-          height: 10px;
-          background: #0f9;
-          border-radius: 50%;
-      }
-      .post-meta {
-          color: #666;
-          font-family: monospace;
-          margin-bottom: 0.5rem;
-          font-size: 0.8rem;
-      }
-      .post-image img {
-          max-width: 100%;
-          border-radius: 4px;
-          border: 1px solid #333;
-          margin: 1rem 0;
-      }
-      h3 { margin-top: 0; font-size: 1.2rem; }
-  </style>
+    <style>
+        .nav-back {
+            margin-bottom: 2rem;
+        }
+        .post-item {
+            border-left: 2px solid #333;
+            padding-left: 1.5rem;
+            margin-bottom: 3rem;
+            position: relative;
+        }
+        .post-item::before {
+            content: "";
+            position: absolute;
+            left: -6px;
+            top: 0;
+            width: 10px;
+            height: 10px;
+            background: #0f9;
+            border-radius: 50%;
+        }
+        .post-meta {
+            color: #666;
+            font-family: monospace;
+            margin-bottom: 0.5rem;
+            font-size: 0.8rem;
+        }
+        .post-image img {
+            max-width: 100%;
+            border-radius: 4px;
+            border: 1px solid #333;
+            margin: 1rem 0;
+        }
+        h3 {
+            margin-top: 0;
+            font-size: 1.2rem;
+        }
+    </style>
 </BaseLayout>
