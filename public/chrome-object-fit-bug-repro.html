@@ -54,23 +54,8 @@
 </head>
 
 <body>
-  <!-- 
-    Bug: Chrome shows a single frame of "squashed" image before object-fit: cover is applied.
-    
-    The image has width="4023" height="1559" (aspect ratio ~2.58:1) but is displayed 
-    in a container with height: 300px (resulting aspect ratio ~4.75:1 depending on viewport).
-    
-    This does NOT occur in Safari or Firefox.
-    
-    IMPORTANT: This must be served from a web server (not file://) to reproduce.
-    Run: python3 -m http.server 8080
-    Then open: http://localhost:8080/chrome-object-fit-bug-repro.html
-  -->
-
   <!-- Live deployed version - srcset selects different sized images -->
-  <img src="https://lab.rbyers.ca/_astro/lab-short.BT76v17K_Z1Ypzyu.webp" srcset="https://lab.rbyers.ca/_astro/lab-short.BT76v17K_tfW3L.webp 640w,
-            https://lab.rbyers.ca/_astro/lab-short.BT76v17K_ZHiHrR.webp 1024w,
-            https://lab.rbyers.ca/_astro/lab-short.BT76v17K_erUeI.webp 1920w" sizes="(max-width: 640px) 640px, (max-width: 1024px) 1024px, 1920px" alt="Lab benchtop" width="4023" height="1559" loading="eager" decoding="sync" fetchpriority="high" class="header-image">
+  <img src="https://lab.rbyers.ca/_astro/lab-short.BT76v17K_Z1Ypzyu.webp" alt="Lab benchtop" width="4023" height="1559" loading="eager" decoding="sync" fetchpriority="high" class="header-image">
 
   <main>
     <h1>Chrome <code>object-fit: cover</code> Flash Bug</h1>
