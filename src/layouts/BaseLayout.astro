@@ -9,6 +9,7 @@ import "../styles/global.css";
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
     <title>{title} | RByers Lab</title>
   </head>
   <body>
@@ -21,18 +22,7 @@ import "../styles/global.css";
       </ul>
     </nav>
 
-    {
-      showHeaderImage && (
-        <Image
-          src={labHeader}
-          alt="RByers Lab Benchtop view"
-          class="header-image"
-          widths={[640, 1024, 1920]}
-          sizes="(max-width: 640px) 640px, (max-width: 1024px) 1024px, 1920px"
-          loading="eager"
-        />
-      )
-    }
+    {showHeaderImage && <Image src={labHeader} alt="RByers Lab Benchtop view" class="header-image" widths={[640, 1024, 1920]} sizes="(max-width: 640px) 640px, (max-width: 1024px) 1024px, 1920px" loading="eager" />}
 
     <main>
       <h1>{title}</h1>
