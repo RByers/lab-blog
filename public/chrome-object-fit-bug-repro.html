@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chrome object-fit: cover Flash Bug Reproduction</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #ccc;
+      font-family: system-ui, sans-serif;
+    }
+
+    .header-image {
+      width: 100%;
+      height: 300px;
+      display: block;
+      object-fit: cover;
+    }
+
+    main {
+      padding: 2rem;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      color: #fff;
+    }
+
+    code {
+      background: #333;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+    }
+
+    .instructions {
+      background: #222;
+      padding: 1rem;
+      border-radius: 8px;
+      margin: 1rem 0;
+    }
+
+    .warning {
+      background: #442;
+      border-left: 4px solid #f90;
+      padding: 1rem;
+      margin: 1rem 0;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- 
+    Bug: Chrome shows a single frame of "squashed" image before object-fit: cover is applied.
+    
+    The image has width="4023" height="1559" (aspect ratio ~2.58:1) but is displayed 
+    in a container with height: 300px (resulting aspect ratio ~4.75:1 depending on viewport).
+    
+    This does NOT occur in Safari or Firefox.
+    
+    IMPORTANT: This must be served from a web server (not file://) to reproduce.
+    Run: python3 -m http.server 8080
+    Then open: http://localhost:8080/chrome-object-fit-bug-repro.html
+  -->
+
+  <!-- Live deployed version - srcset selects different sized images -->
+  <img src="https://lab.rbyers.ca/_astro/lab-short.BT76v17K_Z1Ypzyu.webp" srcset="https://lab.rbyers.ca/_astro/lab-short.BT76v17K_tfW3L.webp 640w,
+            https://lab.rbyers.ca/_astro/lab-short.BT76v17K_ZHiHrR.webp 1024w,
+            https://lab.rbyers.ca/_astro/lab-short.BT76v17K_erUeI.webp 1920w" sizes="(max-width: 640px) 640px, (max-width: 1024px) 1024px, 1920px" alt="Lab benchtop" width="4023" height="1559" loading="eager" decoding="sync" fetchpriority="high" class="header-image">
+
+  <main>
+    <h1>Chrome <code>object-fit: cover</code> Flash Bug</h1>
+
+    <div class="warning">
+      <strong>To reproduce:</strong> This page must be served from a web server, not opened as a local file.
+      The bug appears to require real network request timing.
+      <br><br>
+      <code>python3 -m http.server 8080</code><br>
+      Then visit: <a href="http://localhost:8080/chrome-object-fit-bug-repro.html">http://localhost:8080/chrome-object-fit-bug-repro.html</a>
+    </div>
+
+    <div class="instructions">
+      <h2>Steps to Reproduce:</h2>
+      <ol>
+        <li>Serve this page from a web server (not file://)</li>
+        <li>Open in Chrome with DevTools Network tab → disable cache and/or set throttling</li>
+        <li>Hard refresh (Cmd+Shift+R / Ctrl+Shift+R)</li>
+        <li>Observe a brief "squashed" frame where the image appears at its natural aspect ratio before <code>object-fit: cover</code> is applied</li>
+      </ol>
+
+      <h2>Expected:</h2>
+      <p>Image should render with <code>object-fit: cover</code> applied from the first paint, showing a cropped 300px tall section.</p>
+
+      <h2>Actual:</h2>
+      <p>For one frame, the image appears squashed/compressed to fit 300px height at full width before being corrected.</p>
+
+      <h2>Works correctly in:</h2>
+      <ul>
+        <li>Safari</li>
+        <li>Firefox</li>
+      </ul>
+
+      <h2>Technical Details:</h2>
+      <ul>
+        <li>Image natural dimensions: 4023×1559 (aspect ratio ~2.58:1)</li>
+        <li>srcset provides multiple sizes: 640w, 1024w, 1920w</li>
+        <li>Container height: 300px fixed</li>
+        <li>Container width: 100% viewport</li>
+        <li>The mismatch between HTML width/height attributes (original image) and selected srcset image dimensions may be relevant</li>
+        <li>The bug may be in how Chrome calculates layout before the srcset image is decoded</li>
+      </ul>
+
+      <h2>Attempted Workarounds (none worked):</h2>
+      <ul>
+        <li><code>decoding="sync"</code></li>
+        <li><code>fetchpriority="high"</code></li>
+        <li><code>loading="eager"</code></li>
+        <li><code>border-radius: 0.1px</code> (known workaround for older object-fit bugs)</li>
+        <li>Fixed <code>height: 300px</code> instead of <code>max-height: 300px</code></li>
+      </ul>
+
+      <h2>Hypothesis:</h2>
+      <p>
+        When srcset is used, Chrome may be calculating initial layout based on the
+        <code>width</code> and <code>height</code> attributes (4023×1559) but the
+        actually loaded image from srcset has different dimensions (e.g., 1920×744).
+        During the transition, <code>object-fit: cover</code> may not be correctly applied
+        for one paint frame.
+      </p>
+    </div>
+  </main>
+</body>
+
+</html>
