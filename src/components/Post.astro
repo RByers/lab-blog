@@ -28,6 +28,16 @@ const dateStr = postDate.toLocaleString("en-US", {
     hour: "numeric",
     minute: "numeric",
 });
+
+// Determine if we are on the single post page
+const currentPath = Astro.url.pathname.replace(/\/$/, "");
+const postPath = url.replace(/\/$/, "");
+const isSingleView = currentPath === postPath;
+
+// If on single view and we have a source URL, link to that. Otherwise link to the permalink.
+const dateHref = isSingleView && sourceUrl ? sourceUrl : url;
+const dateTarget = isSingleView && sourceUrl ? "_blank" : undefined;
+const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
 ---
 
 <article class="tweet-post">
@@ -39,7 +49,7 @@ const dateStr = postDate.toLocaleString("en-US", {
                 <span class="handle">@{author.handle}</span>
             </div>
         </div>
-        <a href={url} class="permalink">
+        <a href={dateHref} class="permalink" target={dateTarget} rel={dateRel}>
             <time datetime={date}>{dateStr}</time>
         </a>
     </div>
