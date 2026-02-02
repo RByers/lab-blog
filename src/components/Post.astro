@@ -90,6 +90,7 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background: #fff;
         color: #14171a;
+        overflow: hidden; /* Prevent horizontal scroll from long content */
     }
 
     .header {
@@ -150,6 +151,8 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
         font-size: 0.95rem;
         line-height: 1.4;
         white-space: pre-wrap;
+        overflow-wrap: break-word; /* Ensure long text wraps */
+        min-width: 0; /* Allow flex item to shrink below content size */
     }
 
     .text:not(:empty) {
@@ -160,6 +163,13 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
     .text :global(a) {
         color: #1b95e0;
         text-decoration: none;
+        /* Truncate long URLs */
+        display: inline-block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        vertical-align: bottom;
+        white-space: nowrap;
     }
     .text :global(a:hover) {
         text-decoration: underline;
