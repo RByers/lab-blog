@@ -112,8 +112,11 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
 
     .names {
         display: flex;
-        align-items: baseline;
-        gap: 0.4rem;
+        flex-direction: column;
+        justify-content: center;
+        height: 40px;
+        gap: 0;
+        line-height: 1.2;
     }
 
     .name {
@@ -124,7 +127,7 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
 
     .handle {
         color: #657786;
-        font-size: 0.9rem;
+        font-size: 0.85rem;
     }
 
     .permalink {
