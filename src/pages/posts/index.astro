@@ -3,11 +3,22 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 import { getCollection } from "astro:content";
 
 const allPosts = await getCollection("posts");
-const years = [...new Set(allPosts.map((post) => post.data.date.getFullYear()))].sort((a, b) => b - a);
+
+// Extract year from slug (structure: year/filename)
+const years = [
+  ...new Set(
+    allPosts.map((post) => {
+      const parts = post.slug.split("/");
+      return parts.length > 1 ? parseInt(parts[0]) : null;
+    }),
+  ),
+]
+  .filter(Boolean)
+  .sort((a, b) => b - a);
 
 // Count posts per year
 const postsByYear = years.map((year) => {
-  const count = allPosts.filter((p) => p.data.date.getFullYear() === year).length;
+  const count = allPosts.filter((p) => p.slug.startsWith(`${year}/`)).length;
   return { year, count };
 });
 ---

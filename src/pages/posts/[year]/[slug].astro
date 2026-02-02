@@ -1,0 +1,43 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+
+export async function getStaticPaths() {
+    const posts = await getCollection("posts");
+    return posts
+        .map((post) => {
+            const parts = post.slug.split("/");
+            // Ensure we only handle posts in year folders
+            if (parts.length < 2) return null;
+            const year = parts[0];
+            const slug = parts[1];
+            return { params: { year, slug }, props: { post } };
+        })
+        .filter(Boolean);
+}
+
+const { post } = Astro.props;
+const { Content } = await post.render();
+const [year] = post.slug.split("/");
+---
+
+<BaseLayout title="Post">
+    <div class="nav-back">
+        <a href={`/posts/${year}`}>&larr; {year} Archive</a>
+    </div>
+
+    <div class="single-post">
+        <Content />
+    </div>
+</BaseLayout>
+
+<style>
+    .single-post {
+        max-width: 600px;
+        margin: 0 auto;
+        margin-top: 2rem;
+    }
+    .nav-back {
+        margin-bottom: 2rem;
+    }
+</style>

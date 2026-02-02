@@ -1,0 +1,73 @@
+---
+import BaseLayout from "../../../layouts/BaseLayout.astro";
+import { getCollection } from "astro:content";
+
+export async function getStaticPaths() {
+    const posts = await getCollection("posts");
+    const years = new Set(posts.map((p) => p.slug.split("/")[0]));
+    return Array.from(years).map((year) => ({ params: { year } }));
+}
+
+const { year } = Astro.params;
+const posts = await getCollection("posts");
+const yearPosts = posts.filter((p) => p.slug.startsWith(`${year}/`));
+
+// Sort by date (descending) - assuming slug contains date YYYYMMDD...
+yearPosts.sort((a, b) => b.slug.localeCompare(a.slug));
+
+// Render content for all posts
+const postsWithContent = await Promise.all(
+    yearPosts.map(async (p) => {
+        const { Content } = await p.render();
+        return { ...p, Content };
+    }),
+);
+---
+
+<BaseLayout title={`Archive ${year}`}>
+    <div class="nav-back">
+        <a href="/posts">&larr; All Years</a>
+    </div>
+
+    <div class="posts-feed">
+        {
+            postsWithContent.map((post) => (
+                <div class="post-wrapper" id={post.slug.split("/")[1]}>
+                    <post.Content />
+                    <div class="post-actions">
+                        <a href={`/posts/${post.slug}`} class="permalink">
+                            Permalink
+                        </a>
+                    </div>
+                </div>
+            ))
+        }
+    </div>
+</BaseLayout>
+
+<style>
+    .posts-feed {
+        max-width: 600px;
+        margin: 0 auto;
+    }
+    .post-wrapper {
+        position: relative;
+        margin-bottom: 3rem;
+    }
+    .post-actions {
+        margin-top: 0.5rem;
+        text-align: right;
+        font-size: 0.9rem;
+    }
+    .permalink {
+        color: #999;
+        text-decoration: none;
+    }
+    .permalink:hover {
+        color: #666;
+        text-decoration: underline;
+    }
+    .nav-back {
+        margin-bottom: 2rem;
+    }
+</style>

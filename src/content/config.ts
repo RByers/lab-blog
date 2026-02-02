@@ -3,8 +3,10 @@ import { defineCollection, z } from 'astro:content';
 const posts = defineCollection({
     type: 'content',
     schema: z.object({
+        // Minimal schema, as most data is now in the component props
+        // We might use title/date if available, but they are optional
         title: z.string().optional(),
-        date: z.date(),
+        date: z.date().optional(),
         image: z.string().optional(),
         tags: z.array(z.string()).optional(),
     }),
