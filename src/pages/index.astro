@@ -3,12 +3,11 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 import { getCollection } from "astro:content";
 
 const essays = await getCollection("essays");
-const sortedEssays = essays.sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
+const sortedEssays = essays.filter((essay) => !essay.data.draft).sort((a, b) => b.data.date.valueOf() - a.data.date.valueOf());
 ---
 
 <BaseLayout title="Lab Notes">
-  <p>Welcome to my blog about my home molecular virology lab. Below are my long-form essays. See also <a href="/posts/">posts</a> and <a href="/about/">about</a>.</p>
-
+  <p>Welcome to my blog <a href="/about/">about my home molecular virology lab</a>. Below are my long-form essays. See also my <a href="/posts/">social media posts</a>.</p>
   {
     sortedEssays.map((essay) => (
       <article>

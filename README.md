@@ -3,7 +3,7 @@
 ## Overview
 
 This is the source for [RByers Lab](https://lab.rbyers.ca) blog.
-It is a static website built with [Astro](https://astro.build), [Google Antigravity](http://antigravity.google/) and Gemini.
+It is a static website built with [Astro](https://astro.build), [Google Antigravity](http://antigravity.google/), Gemini and Claude Opus.
 
 ## 🚀 Project Structure
 
