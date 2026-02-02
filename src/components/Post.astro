@@ -11,12 +11,13 @@ interface Props {
         url: string;
         alt?: string;
     }[];
-    link?: string;
     faves?: number;
     reposts?: number;
+    url: string; // Required - permalink
+    sourceUrl?: string; // URL to original tweet on x.com
 }
 
-const { author, date, media = [], link, faves = 0, reposts = 0 } = Astro.props;
+const { author, date, media = [], faves = 0, reposts = 0, url, sourceUrl } = Astro.props;
 
 // Format date nicely
 const postDate = new Date(date);
@@ -30,49 +31,42 @@ const dateStr = postDate.toLocaleString("en-US", {
 ---
 
 <article class="tweet-post">
-    <div class="user-info">
-        <img src={author.avatar} alt={author.name} class="avatar" />
-        <div class="names">
-            <span class="name">{author.name}</span>
-            <span class="handle">@{author.handle}</span>
+    <div class="header">
+        <div class="user-info">
+            <img src={author.avatar} alt={author.name} class="avatar" />
+            <div class="names">
+                <span class="name">{author.name}</span>
+                <span class="handle">@{author.handle}</span>
+            </div>
         </div>
+        <a href={url} class="permalink">
+            <time datetime={date}>{dateStr}</time>
+        </a>
     </div>
 
     <div class="post-body">
-        <div class="text">
-            <slot />
-        </div>
+        <!-- Avoid whitespace since text has white-space: pre-wrap -->
+        <div class="text"><slot /></div>
 
         {
             media.length > 0 && (
                 <div class={`media-grid media-${media.length}`}>
                     {media.map((item) => (
-                        <div class="media-item">{item.type === "video" ? <video src={item.url} controls /> : <img src={item.url} alt={item.alt || ""} />}</div>
+                        <div class="media-item">
+                            {item.type === "video" ? (
+                                <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                    <video src={item.url} controls preload="metadata" />
+                                </a>
+                            ) : (
+                                <a href={item.url} target="_blank" rel="noopener noreferrer">
+                                    <img src={item.url} alt={item.alt || ""} />
+                                </a>
+                            )}
+                        </div>
                     ))}
                 </div>
             )
         }
-
-        {
-            link && (
-                <a href={link} class="post-link" target="_blank" rel="noopener noreferrer">
-                    {link}
-                </a>
-            )
-        }
-
-        <div class="meta">
-            <time datetime={date}>{dateStr}</time>
-        </div>
-
-        <div class="stats">
-            <span class="stat">
-                <strong>{reposts}</strong> Reposts
-            </span>
-            <span class="stat">
-                <strong>{faves}</strong> Likes
-            </span>
-        </div>
     </div>
 </article>
 
@@ -80,58 +74,89 @@ const dateStr = postDate.toLocaleString("en-US", {
     .tweet-post {
         border: 1px solid #e1e8ed;
         border-radius: 12px;
-        padding: 1rem;
+        padding: 0.75rem;
         max-width: 600px;
-        margin: 1rem 0;
+        margin: 0.25rem 0;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         background: #fff;
         color: #14171a;
     }
 
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
     .user-info {
         display: flex;
         align-items: center;
-        margin-bottom: 0.5rem;
     }
 
     .avatar {
-        width: 48px;
-        height: 48px;
+        width: 40px;
+        height: 40px;
         border-radius: 50%;
-        margin-right: 0.75rem;
+        margin-right: 0.5rem;
     }
 
     .names {
         display: flex;
-        flex-direction: column;
+        align-items: baseline;
+        gap: 0.4rem;
     }
 
     .name {
         font-weight: bold;
+        font-size: 0.95rem;
         color: #14171a;
     }
 
     .handle {
         color: #657786;
+        font-size: 0.9rem;
+    }
+
+    .permalink {
+        color: #657786;
+        font-size: 0.8rem;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .permalink:hover {
+        text-decoration: underline;
+        color: #1b95e0;
     }
 
     .post-body {
-        margin-top: 5px;
+        margin-top: 0.25rem;
     }
 
     .text {
-        font-size: 1rem;
-        line-height: 1.5;
+        font-size: 0.95rem;
+        line-height: 1.4;
         white-space: pre-wrap;
-        margin-bottom: 1rem;
+    }
+
+    .text:not(:empty) {
+        margin-bottom: 0.5rem;
+    }
+
+    /* Make links in text clickable and styled */
+    .text :global(a) {
+        color: #1b95e0;
+        text-decoration: none;
+    }
+    .text :global(a:hover) {
+        text-decoration: underline;
     }
 
     .media-grid {
         display: grid;
         gap: 2px;
-        border-radius: 12px;
+        border-radius: 8px;
         overflow: hidden;
-        margin-bottom: 1rem;
         border: 1px solid #e1e8ed;
     }
 
@@ -143,9 +168,13 @@ const dateStr = postDate.toLocaleString("en-US", {
     }
     .media-3 {
         grid-template-columns: 1fr 1fr;
-    } /* 3rd item setup omitted for brevity, usually complex grid */
+    }
     .media-4 {
         grid-template-columns: 1fr 1fr;
+    }
+
+    .media-item a {
+        display: block;
     }
 
     .media-item img,
@@ -154,36 +183,6 @@ const dateStr = postDate.toLocaleString("en-US", {
         height: 100%;
         object-fit: cover;
         display: block;
-    }
-
-    .post-link {
-        display: block;
-        color: #1b95e0;
-        text-decoration: none;
-        margin-bottom: 1rem;
-        word-break: break-all;
-    }
-
-    .post-link:hover {
-        text-decoration: underline;
-    }
-
-    .meta {
-        color: #657786;
-        font-size: 0.9rem;
-        margin-bottom: 0.75rem;
-        border-bottom: 1px solid #e1e8ed;
-        padding-bottom: 0.75rem;
-    }
-
-    .stats {
-        display: flex;
-        gap: 1.5rem;
-        font-size: 0.9rem;
-        color: #657786;
-    }
-
-    .stats strong {
-        color: #14171a;
+        cursor: pointer;
     }
 </style>

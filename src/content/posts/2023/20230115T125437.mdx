@@ -1,0 +1,38 @@
+import Post from '../../../components/Post.astro';
+
+<Post 
+  author={{"name":"Rick Byers","handle":"RickByersLab","avatar":"/postmedia/RickByersLab.jpg"}}
+  date="2023-01-15T17:54:37.000Z"
+  media={[{"type":"image","url":"/postmedia/20230115T125437-1.jpg","alt":""}]}
+  faves={1}
+  reposts={0}
+  url="/posts/2023/20230115t125437"
+  sourceUrl="https://x.com/RickByersLab/status/1614682480208117761"
+>
+I finally found the cause of my qPCR virus tests failing for a recent cold virus I knew we had. Through sequencing, I learned my virus happened to have a novel C-&gt;T mutation right at the 3' binding site of the "HRV Ma" primer I use!
+</Post>
+
+<Post 
+  author={{"name":"Rick Byers","handle":"RickByersLab","avatar":"/postmedia/RickByersLab.jpg"}}
+  date="2023-01-15T18:00:52.000Z"
+  media={[{"type":"image","url":"/postmedia/20230115T125437-2.jpg","alt":""}]}
+  faves={0}
+  reposts={0}
+  url="/posts/2023/20230115t125437"
+  sourceUrl="https://x.com/RickByersLab/status/1614684053235441667"
+>
+I'm seeing better (but, to be honest, still unsatisfying) results from the primer labeled "ENT" which is described in <a href="https://www.nature.com/articles/srep34855" target="_blank" rel="noopener noreferrer">https://www.nature.com/articles/srep34855</a>. qPCR plot, green lines HRV, red ENT.
+</Post>
+
+<Post 
+  author={{"name":"Rick Byers","handle":"RickByersLab","avatar":"/postmedia/RickByersLab.jpg"}}
+  date="2023-01-15T18:07:33.000Z"
+  media={[]}
+  faves={0}
+  reposts={0}
+  url="/posts/2023/20230115t125437"
+  sourceUrl="https://x.com/RickByersLab/status/1614685736044732417"
+>
+The different lines in the above plot are trying different primer/probe concentrations. I say the ENT results are unsatisfying because I really had to bump up my primer concentration (500nM to 1.5µM final), the ∆RFU is still too low (600 vs 2000), and plot misshapen.
+</Post>
+

@@ -21,7 +21,7 @@ const { Content } = await post.render();
 const [year] = post.slug.split("/");
 ---
 
-<BaseLayout title="Post">
+<BaseLayout title="Post" showHeaderImage={false} showTitle={false}>
     <div class="nav-back">
         <a href={`/posts/${year}`}>&larr; {year} Archive</a>
     </div>

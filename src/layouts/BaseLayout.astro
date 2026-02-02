@@ -1,5 +1,5 @@
 ---
-const { title, showHeaderImage = true } = Astro.props;
+const { title, showHeaderImage = true, showNav = true, showTitle = true } = Astro.props;
 import { Image } from "astro:assets";
 import labHeader from "../assets/lab-short.jpg";
 import "../styles/global.css";
@@ -13,19 +13,31 @@ import "../styles/global.css";
     <title>{title} | RByers Lab</title>
   </head>
   <body>
-    <nav>
-      <div class="brand"><a href="/">RByers Lab</a></div>
-      <ul>
-        <li><a href="/">Essays</a></li>
-        <li><a href="/posts/">Posts</a></li>
-        <li><a href="/about">About</a></li>
-      </ul>
-    </nav>
+    {
+      showNav && (
+        <nav>
+          <div class="brand">
+            <a href="/">RByers Lab</a>
+          </div>
+          <ul>
+            <li>
+              <a href="/">Essays</a>
+            </li>
+            <li>
+              <a href="/posts/">Posts</a>
+            </li>
+            <li>
+              <a href="/about">About</a>
+            </li>
+          </ul>
+        </nav>
+      )
+    }
 
     {showHeaderImage && <Image src={labHeader} alt="RByers Lab Benchtop view" class="header-image" widths={[640, 1280, 2560]} loading="eager" decoding="sync" fetchpriority="high" />}
 
     <main>
-      <h1>{title}</h1>
+      {showTitle && <h1>{title}</h1>}
       <slot />
     </main>
     <footer>

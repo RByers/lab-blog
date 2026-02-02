@@ -12,8 +12,8 @@ const { year } = Astro.params;
 const posts = await getCollection("posts");
 const yearPosts = posts.filter((p) => p.slug.startsWith(`${year}/`));
 
-// Sort by date (descending) - assuming slug contains date YYYYMMDD...
-yearPosts.sort((a, b) => b.slug.localeCompare(a.slug));
+// Sort by date (ascending) - oldest first
+yearPosts.sort((a, b) => a.slug.localeCompare(b.slug));
 
 // Render content for all posts
 const postsWithContent = await Promise.all(
@@ -24,7 +24,7 @@ const postsWithContent = await Promise.all(
 );
 ---
 
-<BaseLayout title={`Archive ${year}`}>
+<BaseLayout title={`Post Archive ${year}`}>
     <div class="nav-back">
         <a href="/posts">&larr; All Years</a>
     </div>
@@ -34,11 +34,6 @@ const postsWithContent = await Promise.all(
             postsWithContent.map((post) => (
                 <div class="post-wrapper" id={post.slug.split("/")[1]}>
                     <post.Content />
-                    <div class="post-actions">
-                        <a href={`/posts/${post.slug}`} class="permalink">
-                            Permalink
-                        </a>
-                    </div>
                 </div>
             ))
         }
