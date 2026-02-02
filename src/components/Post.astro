@@ -55,7 +55,6 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
     </div>
 
     <div class="post-body">
-        <!-- Avoid whitespace since text has white-space: pre-wrap -->
         <div class="text"><slot /></div>
 
         {
@@ -150,7 +149,6 @@ const dateRel = isSingleView && sourceUrl ? "noopener noreferrer" : undefined;
     .text {
         font-size: 0.95rem;
         line-height: 1.4;
-        white-space: pre-wrap;
         overflow-wrap: break-word; /* Ensure long text wraps */
         min-width: 0; /* Allow flex item to shrink below content size */
     }

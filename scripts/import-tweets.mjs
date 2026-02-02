@@ -224,9 +224,11 @@ async function generatePostComponent(tweet, author, baseFilename, mediaCounter, 
         }
     }
 
-    // Escape logical braces
+    // Escape logical braces and preserve newlines
     text = text.replace(/\{/g, '&#123;').replace(/\}/g, '&#125;');
     text = text.trim();
+    // Use double trailing spaces for interior newlines to create hard breaks
+    text = text.replace(/\n/g, '  \n');
 
     const mediaProp = JSON.stringify(mediaItems);
 
