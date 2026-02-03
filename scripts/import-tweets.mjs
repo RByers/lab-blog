@@ -1,3 +1,13 @@
+// Import-tweets
+// Usage: node import-tweets.mjs [max-files]
+//
+// Processes a twitter archive to generate post content for this blog.
+// Only processes tweets that are not replies to tweets from others.
+// Handles tweet threads.
+// Supports images and video media, displaying full size and supporting
+// click to open in a new tab.
+// Does not handle quote tweets specially since, even when quoting the
+// author, the context is likely unavailable. 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
