@@ -1,10 +1,10 @@
 ---
 import { Image } from "astro:assets";
 
-const { src, alt, caption } = Astro.props;
+const { src, alt, caption, width } = Astro.props;
 ---
 
-<figure>
+<figure style={width ? `max-width: ${width}` : ""}>
     <Image src={src} alt={alt} />
     {caption && <figcaption>{caption}</figcaption>}
 </figure>
@@ -13,6 +13,8 @@ const { src, alt, caption } = Astro.props;
     figure {
         margin: 2rem 0;
         text-align: center;
+        margin-left: auto;
+        margin-right: auto;
     }
 
     figure :global(img) {
