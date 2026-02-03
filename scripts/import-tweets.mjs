@@ -8,6 +8,8 @@
 // click to open in a new tab.
 // Does not handle quote tweets specially since, even when quoting the
 // author, the context is likely unavailable. 
+// Doesn't automatically include retweets (since the context is often missing),
+// but includes a mechanism for explicitly selecting additional tweets to include.
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -83,11 +85,22 @@ async function main() {
     const rootTweets = [];
     const replyTweets = new Map();
 
+    const ROOT_INCLUDE_IDS = new Set([
+        '1387041304509501445',
+    ]);
+
     for (const item of tweetsData) {
         const t = item.tweet;
 
         // Filter out retweets
         if (t.full_text.startsWith('RT @')) continue;
+
+        // Check if explicitly included as a root
+        if (ROOT_INCLUDE_IDS.has(t.id_str)) {
+            rootTweets.push(t);
+            // Assume it will not also be in the reply chain of another tweet.
+            continue;
+        }
 
         const isReply = !!t.in_reply_to_status_id;
         const isSelfReply = t.in_reply_to_user_id_str === myAccountId;
