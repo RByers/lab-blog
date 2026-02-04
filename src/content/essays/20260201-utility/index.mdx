@@ -7,14 +7,16 @@ draft: true
 import Figure from '../../../components/Figure.astro';
 import imgCombotest from 'combotest.png';
 import imgPluslife from 'pluslife.jpg';
+import imgNanoporeToothbrush from 'nanopore-toothbrush.png';
+import imgAirborne from 'airborne.jpg';
 
-Over the past 6 years I have spent around $45k,000 USD and around a thousand hours doing over 300 experiments on the viruses moving through my household. When people ask me why on earth I would spend so much time and money on a home lab, I usually just answer "for fun" or "because I'm curious". But after nearly 6 years of running PCR assays whenever someone in the house has a cold, I can finally say that it is *sometimes* actually useful (while remaining wildly impractical of course).
+Over the past 6 years I have spent around $45k,000 USD in order to do 300+ experiments on the viruses moving through my household. When people ask me why on earth I would spend so much time and money on a home lab, I usually just answer "for fun" or "because I'm curious". But after nearly 6 years of running PCR assays whenever someone in the house has a cold, I can finally say that it is *sometimes* actually useful (while remaining wildly impractical of course).
 
 I am confident that in the future home molecular testing for common pathogens will be as simple, cheap, and uncontroversial as home blood sugar testing is today, revolutionizing our approach to public health and personal medicine. In this essay I will give some background on home virus testing and share a few examples of how having a molecular virology lab in my home has benefited my family.
 
 ## Background
 
-### The state of virus testing at home
+### The state of home virus testing
 
 In 2020 I [predicted](../20200418-dawn-of-personal-biotech/) that molecular virus testing would become common in the home. Of course, what I failed to predict was that rapid antigen lateral flow tests would largely fill this role for COVID-19. Antigen tests are cheap, fast and easy to use. While not technically nearly as sensitive as molecular tests, for most people looking to reduce transmission risk, antigen tests are the practical way to go. There are now also [combination antigent tests](posts/2024/20240129t222514) on the market which allow you to test for COVID-19 as well as a few other common respiratory viruses like Influenza A & B, Respiratory Syncytial Virus (RSV), and Adenovirus. 
 
@@ -38,15 +40,37 @@ Since then the Chinese [Pluslife](https://www.pluslife.com/) [device](/posts/202
   width="500px"
 />
 
-Consumer antigen and molecular tests are very practical and generally useful for determining infection status for viruses like COVID-19, Influenza, and RSV. Personally I run a Pluslife test whenever I want a quick test for these viruses. But their biggest limitation is that they don't test for the most common cause of the common cold, Rhinovirus. Rhinovirus is incredibly diverse and so particularly difficult to design a simple reliable test for. In my experience it's much more powerful and satisfying to reliably be able to answer the question "what do I have" instead of simply confirming "it's not COVID or Flu".
-
 ### Advantages offered by a full lab
 
-### My goals for my lab
+Consumer antigen and molecular tests are practical and generally useful for determining infection status for viruses like COVID-19, Influenza, and RSV. Personally I run a Pluslife test whenever I want a quick test for these viruses. But their biggest limitation is that they don't test for the most common cause of the common cold, Rhinovirus. Rhinovirus is incredibly diverse and so particularly difficult to design a simple reliable test for. When someone is sick in my house I typically check it against 15 different viruses. In my experience it's much more powerful and satisfying to reliably be able to answer the question "what do I have" instead of simply confirming "it's not COVID or Flu". 
 
-My primary goal with my lab is to understand how virus testing can contribute to reduced infections within my family while preserving a normal lifestyle such as eating out, travelling, and socializing. I appreciate why heavy reliance on respirator masks is a good solution for many infection-conscious individuals, but after living that lifestyle for a couple years (and despite appreciating the clear reduction in respiratory infections), my family has decided it's not a tradeoff we are willing to make ourselves. We rely on masks (and nasal sprays) primarily in high-risk environments such as airplanes and when near someone obviously sick.
+A molecular virology lab can also provide additional details, such as:
+ - Viral load: how much virus is present
+ - Variant analysis: are two samples definitely different
+ - Genotyping: which exact strain of a virus is present
 
-## Benefits and risks for my family in practice
+But how would any of that be useful?
+
+## Historical context
+
+In learning about the [history of public health](https://thispodcastwillkillyou.com/), I'm struck by the repeated stories of people accepting unnecessary suffering and harm largely due to self-inflicted ignorance long past the point of scientific discovery:
+
+- [John Snow](https://en.wikipedia.org/wiki/John_Snow_(physician)) fighting to get the Broad St. pump handle removed to stop people from drinking water contaminated by cholera-ridden sewage when the prevailing belief was that disease was spread by "bad air". 
+- Women dying because [doctors refused to wash their hands](https://en.wikipedia.org/wiki/Ignaz_Semmelweis) between autopsies and delivering babies.
+- The nearly [century-long refusal](https://carlzimmer.com/books/airborne/) to fully appreciate that respiratory viruses are spread predominantly through inhalation of aerosols rather than through contact and droplets.  
+
+<Figure
+  src={imgAirborne}
+  alt="Book titled: Air-borne - the hidden history of the life we breathe, but Carl Zimmer"
+  caption="A great book highlighting our incredible capacity for self-inflicted ignorance in public health."
+  width="300px"
+/>
+
+It seems that in public health, there is a huge gulf between knowledge and understanding. 20 years from now, which of our ignorances around respiratory infections will we look back on and shake our heads at?
+
+## Anecdotes in my household
+
+My primary goal with my lab is to deeply understand how virus testing may contribute to reduced infections. 
 
 ### Risk of false sense of confidence. 
 
@@ -76,6 +100,12 @@ Describe Flu vs. Rhinovirus viral dynamics and Christmas gathering story
 
 ## Looking forward
 
-If you're still reading then I hope that means that, like me, you are intrigued by the idea of improving tools for understanding infections in our bodies. For now the best most people can do is to buy antigen tests for COVID, Flu and RSV. If you are lucky enough to have enough disposable income and live in a place where they are legally available, you could even buy a [Pluslife](https://www.pluslife.com/) or [Metrix](https://shop.aptitudemedical.com/) molecular test kit. Hopefully if enough people find these products useful, prices will come down further and more products will come to market which target more common pathogens like Rhinovirus.
+If you're still reading then I hope that means that, like me, you are fascinated by the idea of improving tools for understanding infections in our bodies. For now the best most people can do is to buy antigen tests for COVID, Flu and RSV. If you are lucky enough to have enough disposable income and live in a place where they are legally available, you could even buy a [Pluslife](https://www.pluslife.com/) or [Metrix](https://shop.aptitudemedical.com/) molecular test kit. Hopefully if enough people find these products useful, prices will come down further and more products will come to market which target more common pathogens like Rhinovirus. Perhaps it won't be long before our toothbrushes come with cheap DNA sequencing for our whole mouth microbiome.
 
-In the meantime, if you want to start learning molecular biology in your own home and can spare $1,000, I suggest buying a [miniPCR](https://www.minipcr.com/product/minipcr-mini8x-thermal-cycler/) and trying out one of their [learning labs](https://www.minipcr.com/product/covid-qpcr/). Alternatively you can follow [me on BlueSky](https://bsky.app/profile/lab.rbyers.ca) and I'll try to keep you updated without how personal virology evolves.
+<Figure
+  src={imgNanoporeToothbrush}
+  alt="A Tweet from Oxford Nanopore, rewteeted by me saying: Direct sequencing in a toothbrush. The future will be incredible and here faster than you think!"
+  caption="A slide and quote from Oxford Nanopore's annual meeting in 2022, describing how they are working towards bringing their miniature sequencing technology towards being practical for regular home use."
+/>
+
+In the meantime, if you want to start learning molecular biology in your own home and can spare $1,000, I suggest buying a [miniPCR](https://www.minipcr.com/product/minipcr-mini8x-thermal-cycler/) and trying out one of their [learning labs](https://www.minipcr.com/product/covid-qpcr/). You can also just follow [me on BlueSky](https://bsky.app/profile/lab.rbyers.ca) and I'll try to keep you updated on how personal virology is getting closer to reality.

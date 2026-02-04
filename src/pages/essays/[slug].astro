@@ -16,6 +16,7 @@ const { Content } = await entry.render();
 
 <BaseLayout title={entry.data.title}>
   <header>
+    {entry.data.draft && <div class="draft-label">DRAFT</div>}
     <p class="date">{entry.data.date.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" })}</p>
   </header>
 
@@ -37,6 +38,18 @@ const { Content } = await entry.render();
       margin-top: 3rem;
       border-top: 1px solid #333;
       padding-top: 1rem;
+    }
+    .draft-label {
+      background-color: #ffcccc;
+      color: #cc0000;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+      font-weight: bold;
+      text-align: center;
+      margin-bottom: 1rem;
+      font-size: 1.5rem;
+      letter-spacing: 0.1em;
+      border: 2px solid #cc0000;
     }
   </style>
 </BaseLayout>
