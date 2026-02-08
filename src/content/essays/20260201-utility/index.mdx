@@ -9,8 +9,13 @@ import imgCombotest from 'combotest.png';
 import imgPluslife from 'pluslife.jpg';
 import imgNanoporeToothbrush from 'nanopore-toothbrush.png';
 import imgAirborne from 'airborne.jpg';
+import imgViruses from 'viruses.png';
+import imgLoad from '../../../../public/postmedia/20230828T224840-1.png';
+import imgPoll from 'tweet-poll.png';
+import imgMelt from 'melt.png';
+import imgAlignment from 'alignment.png';
 
-Over the past 6 years I have spent around $45,000 USD in order to do 300+ experiments on the viruses moving through my household. When people ask me why on earth I would spend so much time and money on a home lab, I usually just answer "for fun" or "because I'm curious". But after nearly 6 years of running PCR assays whenever someone in the house has a cold, I can finally say that it is *sometimes* actually useful (while remaining wildly impractical of course).
+Over the past 6 years I have spent around $45,000 USD in order to do 300+ experiments on the viruses moving through my household. When people ask me why on earth I would spend so much time and money on a home lab, I usually just answer "because I'm curious" or "for fun". But after nearly 6 years of running PCR assays whenever someone in the house has a cold, I can finally say that it is *sometimes* actually useful ... while remaining wildly impractical of course.
 
 I am confident that in the future home molecular testing for common pathogens will be as simple, cheap, and uncontroversial as home blood sugar testing is today, revolutionizing our approach to public health and personal medicine. In this essay I will give some background on home virus testing and share a few examples of how having a molecular virology lab in my home has benefited my family.
 
@@ -18,7 +23,7 @@ I am confident that in the future home molecular testing for common pathogens wi
 
 ### Historical context
 
-In learning about the [history of public health](https://thispodcastwillkillyou.com/), I'm struck by the repeated stories of people accepting unnecessary suffering and harm largely due to self-inflicted ignorance long past the point of scientific discovery:
+In learning about the [history of public health](https://thispodcastwillkillyou.com/), I'm struck by the repeated stories of people accepting unnecessary suffering and harm largely due to self-inflicted ignorance long past the point of scientific discovery. For example:
 
 - [John Snow](https://en.wikipedia.org/wiki/John_Snow_(physician)) fighting to get the Broad St. pump handle removed to stop people from drinking water contaminated by cholera-ridden sewage when the prevailing belief was that disease was spread by "bad air". 
 - Women dying because [doctors refused to wash their hands](https://en.wikipedia.org/wiki/Ignaz_Semmelweis) between autopsies and delivering babies.
@@ -31,11 +36,11 @@ In learning about the [history of public health](https://thispodcastwillkillyou.
   width="300px"
 />
 
-It seems that in public health, there is a huge gulf between knowledge and understanding. 20 years from now, which of our ignorances around respiratory infections will we look back on and shake our heads at? Are we now at the beginning of a new movement which will revolutionize our approach to respiratory disease the way the [sanitary movement](https://en.wikipedia.org/wiki/Sanitary_movement) did for waterborne pathogens?
+It seems that in public health, there is a gulf between knowledge and understanding. 20 years from now, which of our ignorances around respiratory infections will we look back on and shake our heads at? Are we now at the beginning of a new movement which will revolutionize our approach to respiratory disease the way the [sanitary movement](https://en.wikipedia.org/wiki/Sanitary_movement) did for waterborne pathogens?
 
 ### The state of home virus testing
 
-In 2020 I [predicted](../20200418-dawn-of-personal-biotech/) that molecular virus testing would become common in the home. Of course, what I failed to predict was that rapid antigen lateral flow tests would largely fill this role for COVID-19. Antigen tests are cheap, fast and easy to use. While not technically nearly as sensitive as molecular tests, for most people looking to reduce transmission risk, antigen tests are the practical way to go. There are now also [combination antigent tests](posts/2024/20240129t222514) on the market which allow you to test for COVID-19 as well as a few other common respiratory viruses like Influenza A & B, Respiratory Syncytial Virus (RSV), and Adenovirus. 
+In 2020 I [predicted](../20200418-dawn-of-personal-biotech/) that molecular virus testing would become common in the home. Of course, I failed to predict that rapid antigen lateral flow tests would largely fill this role for COVID-19. Antigen tests are cheap, fast and easy to use. While not nearly as sensitive as molecular tests, for most people looking to reduce transmission risk, antigen tests are the practical way to go. There are now also [combination antigent tests](posts/2024/20240129t222514) on the market which allow you to test for COVID-19 as well as a few other common respiratory viruses like Influenza A & B, Respiratory Syncytial Virus (RSV), and Adenovirus. 
 
 <Figure 
   src={imgCombotest}
@@ -44,11 +49,11 @@ In 2020 I [predicted](../20200418-dawn-of-personal-biotech/) that molecular viru
   width="300px"
 />
 
-But molecular tests have a few big advantages over antigen tests. First, they are sensitive enough to detect an infection around a day before really becoing contagious. I probably [avoided infecting a number of friends with COVID-19](/posts/2024/20240203t220244) thanks to the sensitivity of home molecular testing. Antigen tests also tend to have a small (~0.2%) risk of false positives, which can be annoying once you've done hundreds like me. Additionally molecular tests can provide a wealth of additional information, which I will go into below. 
+Molecular tests have a few big advantages over antigen tests. First, they are sensitive enough to detect an infection around a day before really becoing contagious. Personally, I [avoided infecting a number of friends with COVID-19](/posts/2024/20240203t220244) thanks to the sensitivity of home molecular testing. Antigen tests also tend to have a small (~0.2%) risk of false positives, which can be quite annoying if you don't have an easy way to verify the result with a molecular test.
 
 During the height of the COVID-19 pandemic, two main home molecular tests were widely available (at least in North America), the [Lucira Check-It](/posts/2021/20210826t221004) and later the [Cue test](/posts/2022/20220228t001521), running around $55 - $75 USD per test. Unfortunately after a fast rise and IPO, both companies [struggled](https://pmc.ncbi.nlm.nih.gov/articles/PMC12461465/) (unfairly, in my opinion) with [regulatory](https://www.fda.gov/medical-devices/safety-communications/update-do-not-use-cue-healths-covid-19-tests-due-risk-false-results-fda-safety-communication) approvals and ultimately went bankrupt.
 
-Since then the Chinese [Pluslife](https://www.pluslife.com/) [device](/posts/2024/20240803t180525) (with it's awesome 3rd party web app [virus.sucks](https://virus.sucks)) has emerged as the favourite of the COVID-concious community, with a substantial online community of fans. At around $8/test these are the most cost-effective molecular tests available to consumers. Unfortunately they are not approved in North America and have gotten more difficult to import here. [Metrix](https://shop.aptitudemedical.com/products/metrix-covid-19-test) is a new $25/test molecular testing system on the market in the US, but it's the only one I haven't yet used myself.
+Since then the Chinese [Pluslife](https://www.pluslife.com/) [device](/posts/2024/20240803t180525) (with it's awesome 3rd party web app [virus.sucks](https://virus.sucks)) has emerged as the favourite of the COVID-concious community, with a substantial online community of fans. At around $8/test these are the most cost-effective molecular tests available to consumers. Unfortunately they are not approved in North America and have gotten more difficult to import here. [Metrix](https://shop.aptitudemedical.com/products/metrix-covid-19-test) is a new $25/test molecular testing system on the market in the US which looks similar to Cue, but I haven't used it myself yet.
 
 <Figure
   src={imgPluslife}
@@ -57,46 +62,88 @@ Since then the Chinese [Pluslife](https://www.pluslife.com/) [device](/posts/202
   width="500px"
 />
 
-### Advantages offered by a full lab
+These home molecular tests are a great complement to antigen tests for predicting future contagiousness and for defending against antigen false positives. Personally I run a Pluslife test whenever I want a quick test for COVID-19 or Influenza. But they are not nearly as powerful as what can be done with a full molecular virology lab.
 
-Consumer antigen and molecular tests are practical and generally useful for determining infection status for viruses like COVID-19, Influenza, and RSV. Personally I run a Pluslife test whenever I want a quick test for these viruses. But their biggest limitation is that they don't test for the most common cause of the common cold, Rhinovirus. Rhinovirus is incredibly diverse and so particularly difficult to design a simple reliable test for. When someone is sick in my house I typically check it against 15 different viruses. In my experience it's much more powerful and satisfying to reliably be able to answer the question "what do I have" instead of simply confirming "it's not COVID or Flu". 
+### Advantages of having a molecular biology lab
+
+The biggest limitation of home tests is that they don't test for the most common cause of the common cold, Rhinovirus. Rhinovirus is incredibly diverse and so particularly difficult to design a simple reliable test for. When someone is sick in my house I typically check it against [15 different viruses](https://docs.google.com/spreadsheets/d/1Unzecg72gMkiTvilp634tVyCdSa6qWtwTcD0QKhtI0g/edit?gid=1750282749#gid=1750282749), and more often than not it's Rhinovirus [that I find](/posts/2025/20251011t130906/). In my experience it's much more powerful and satisfying to reliably be able to answer the question "what do I have" instead of simply confirming "it's not COVID or Flu". 
+
+<Figure
+  src={imgViruses}
+  alt="A table of 32 viruses with sample name, species and type. Most are labeled HRV with several SARS-CoV-2 and INFA, plus one OC43 and one PIV3."
+  caption="The viruses I've detected in my house so far. Green rows are Rhinoviruses."
+  width="500px"
+/>
 
 A molecular virology lab can also provide additional details, such as:
  - Viral load: how much virus is present
  - Variant analysis: are two samples definitely different
  - Genotyping: which exact strain of a virus is present
 
-But how would any of that be useful?
-
 ## Anecdotes in my household
 
-My primary goal with my lab is to deeply understand how virus testing may contribute to reduced infections. 
+My primary goal with my lab is to deeply understand how widespread virus testing may contribute to improved infection control and a sense of personal empowerment over our own health. Below are a few anecdotes from how I've found my lab to be useful towards those goals.
 
-### Risk of false sense of confidence. 
+But first I want to acknowledge that there are some risks to what I'm doing. All of my equipment and reagents are "for research use only", and I consider everything I do to be experimental research. I am certainly not qualified to be giving medical diagnoses or medical advice. We have medical testing regulations in order to protect people from unreliable products which can cause harm including a false sense of confidence and a poor substitute for seeking proper healthcare advice. I do not sell testing or otherwise broadly test people outside my family. Altough its generally obvious, I am careful to explain to my family that my results are unreliable and may represent a false positive from contamination, or a false negative from assay failure. I am careful not to increase transmission risk in any way, and all of my samples are inactivated (killed) so that they are not infectious and so do not fall under any biosafety regulations. I do not propagate virus or grow bacteria in my lab, I do not buy dangerously toxic or carcinogenic reagents, and I dispose of all waste in accordance with local regulations. I am not encouraging anyone else to do what I am doing and I can't offer advice on any legal implications.
 
-Acknowledge research use only, not "healthcare"
+With that out of the way, let's get to the fun stuff!
+
+### Making quantified risk-benefit tradeoffs
+
+The first question I always have when I have a cold is "what do I need to do to avoid spreading this". Within our household we generally isolate from eachother when we are sick, relying on masking and good ventilzation with UV-C HVAC sterilization to prevent colds spreading to eachother. This was particularly important before my son moved out to University because a cold would typically knock him on his back for 1-2 weeks, causing him to miss school and tests. Before I had a good testing protocol figured out, we've had a couple cases where someone in the family said "I feel mostly better", stopped isolating, and then a few days later others in the house got sick. For Rhinovirus I've found that symptoms do generally correlate pretty well with viral load (amount of virus in a swab), but it tends not to be until I'm feeling perfectly better (no congestion at all) that the virus drops to a point where it's unlikely to be contagious. For example, here is a plot of the viral load each day for a Rhinovirus I had in August 2023.
+
+<Figure
+  src={imgLoad}
+  alt="A graph showing viral load correlation with symptoms, falling only after the symptoms resolve completely"
+  caption="Amount of Rhinivorus in one cold of mine, overlaid with my symptoms. 'Cq' is the PCR cycle threshold, an inverse log scale (eg. Cq of 24 represents roughly twice the number of virus particles as Cq of 25)."
+  width="800px"
+/>
+
+Before building up my lab, I'd say we had about a 50/50 chance of catching eachother's colds in the house. With the availability of rapid antigen tests for COVID and Flu we have been able to rely on these to decide when to stop isolating (eg. 2 negative tests 48 hours apart). But when someone has just a cold (for which no antigen tests exist), I run PCR tests to help decide when to stop isolating. This has worked very well, with almost no secondary infections in the household.
+
+My own behavior has also changed. In the past I'd work from home when feeling sick, but typically go back to the office once I "felt better" and could tell myself "I'm probably not contagious". Now that I can get data instead of guessing, I continue working from home and isolating from my family for an extra day or two until I really see the viral load drop off.
+
+While ignorance may be bliss for most people, for me and my family, we're happier knowing that we're not unnecessarily spreading our viruses to eachother and others. I especially appreciate this extra protection from my family's colds before going on a trip, nothing ruins a work trip or vacation more than getting a bad cold right at the start!
+
+### Tailoring tradeoffs to the virus type
+
+Describe Flu vs. Rhinovirus viral dynamics and Christmas gathering story
 
 ### Evaluating our infection mitigation strategies
 
-Did I catch my Son's cold?
+In order to know whether we are succeeding at keeping our colds from eachother, it's useful to be able to differentiate different virus variants from each other. For example, here's a [case](/posts/2023/20230819t190430) where my Twitter followers predicted that I caught my son's cold:
 
-Image of melt Analysis
+<Figure
+  src={imgPoll}
+  alt="Tweet saying 'My son came down with a cold 17 days ago. He wore a mask when around the family until his symptoms were done 11 days ago. Yesterday I came down with a cold too. Nobody else in the family has had cold symptoms in this time'. 54% predicted I caught my son's cold."
+  caption="Most people predicted I caught my son's cold"
+  width="600px"
+/>
+
+But I was able to do a quick and simple "melt analysis" which proved conclusively that they were different Rhinoviruses:
+
+<Figure
+  src={imgMelt}
+  alt="A chart with many lines with temperature on the x-axis and RFU on the y-axis. The line labeled 'My son's cold' shows a spike around 86° and the rest show a spike arouind 89°, labeled 'my cold'."
+  caption="A PCR melt analysis showing multiple samples from my cold meting around 89°C, while the sample from my son's cold meting around 86°C"
+  width="800px"
+/>
+
+Later, when I had the time to run these viruses on my DNA sequencer, I was able to confirm that my son had a strain known as Rhinovirus A54, while I had a strain from a completely different species known as Rhinovirus C45. While both are Rhinoviruses, they are actually quite different from eachother, with only 77% of the bases matching (for the short 350bp section I sequenced). This also meant that, while having just recovered from a cold, my son was probably not immune to my virus and so it was good that I isolated from him.
+
+<Figure
+  src={imgAlignment}
+  alt="Two strings of DNA, one on top of the other. Differences are highlighted."
+  caption="A comparison of some of the DNA sequence from my son's Rhinovirus A54 on top, and my Rhinovirus C45 on the bottom."
+  width="1000px"
+/>
 
 ### Supporting healthcare
 
 PIV-2 anosmia
 
-### Making quantified risk-benefit tradeoffs
+Vaccine relationship
 
-When to isolate in the family
-
-When to return to work - Rhinovirus
-
-Image of Rhinovirus viral load vs. symptoms
-
-### Tailoring tradeoffs to the virus type
-
-Describe Flu vs. Rhinovirus viral dynamics and Christmas gathering story
 
 ## Looking forward
 
