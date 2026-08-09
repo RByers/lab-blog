@@ -1,0 +1,74 @@
+---
+title: "Home PCR Step-by-Step"
+date: 2026-04-25
+draft: true
+description: "A step-by-step guide to doing basic respiratory virus RT-qPCR at home."
+---
+import Figure from '../../../components/Figure.astro';
+import imgSetup from 'lab-setup.jpg';
+
+# Home PCR Step-by-Step
+
+For some people (eg. the immunocompromised or those with other health concerns), regular SARS-CoV-2 molecular testing is an important part of how they stay healthy while still seeing friends and family. Unfortunately, in regions like North America, there are few if any molecular SARS-CoV-2 tests approved by regulators. While approved antigen tests are generally the best option for most people, the addition of molecular testing (even when imperfect) can provide [extra protection](/posts/2024/20240203t220244/) and extra peace of mind. In you are in Europe or Asia, I strongly reccomend the [Pluslife testing system](https://www.pluslife.com/) as more practical and probably more reliable than DIY PCR. In the USA, the only [FDA-approved](https://www.fda.gov/medical-devices/coronavirus-covid-19-and-medical-devices/home-otc-covid-19-diagnostic-tests#list) home molecular SARS-CoV-2 tests are [Metrix](https://shop.aptitudemedical.com/products/metrix-covid-19-test) and [3eo](https://verseadiagnostics.com/products/3eo-health-covid-19-starter-pack-1), but I have used neither. If, like me, you are in Canada, you are currently completely out of luck for Health Canada approved molecular testing. The companies behind prior good quality products like Lucira Check-it and Cue have gone out of business, due, I believe, to the failure of the regulatory bodies to have pragmatic and predictable approval programs.
+
+This guide is intended for those who want to try getting into experimenting with do-it-yourself PCR for viruses like SARS-CoV-2. The instructions and products listed here are for research and education purposes only due to the liklihood of error and possibility of false negatives. Where testing is important for your health, you should rely on tests approved by your local regulatory bodies. But if you are curious and can afford to spend a few thousand dollars just for interests sake, then read on!
+
+## Objectives
+
+For any experimental setup it's important to first be clear on what exactly you're trying to achieve. There are always tradeoffs, so it's useful to be clear on how you are balancing priorities. My goals here are:
+ - Detect SARS-CoV-2 RNA in a nasal swab sample
+ - Using molecular biology laboratory techniques, not consumer devices
+ - Lowest possible upfront and per-test costs
+ - Minimize time and education required, though simplicity is a non-goal (use consumer tests for that)
+ - Some mechanism for differentiating strong vs. weak positives, though precise quantification is out-of-scope
+ - Reliable enough to be a useful supplement to antigen testing, not a replacement for it
+
+## Lab setup
+
+To get started you'll need a bunch of molecular biology equipment, most critically a PCR machine. I reccomend the [miniPCR mini8x](https://www.minipcr.com/product/minipcr-mini8x-thermal-cycler/), though the [Bento Lab](https://bento.bio/) also looks interesting. Low cost equipment can be readily ordered from educational suppliers like [miniPCR](https://www.minipcr.com), and generic lab supplies can be ordered from [Amazon](https://www.amazon.com/). Some of the reagents required can only be ordered from lab supply companies which ship only to businesses and legitimate research organizations, presumably for biosafety reasons. 
+
+[Here](https://docs.google.com/spreadsheets/d/1ZRv7H0h0_ZykvDzASRKRXLfbW6T-wfEI3wnaJhi6-kM/edit?gid=0#gid=0) is an example shopping list. This comes to around $2,100 USD plus taxes and shipping for your first 50 tests, then about $10 per test after that.
+
+| Product                                                                                                                                                     | Source   | Price  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------ |
+| [MicroPipette kit (10µL, 100µL, 1000µL)](https://www.amazon.com/MicroPipette-Kit-Scientific-Multi-Autoclavable/dp/B06XZJ2S8X/ref=sr_1_1_sspa)               | Amazon   | $135   |
+| [Nitrile gloves](https://www.amazon.com/Supmedic-Nitrile-Disposable-Powder-Free-Latex-Free/dp/B0C9SBFGZR/ref=sr_1_4)                                        | Amazon   | $10    |
+| [Lab safety goggles](https://www.amazon.com/EinKau-Indirectly-Wide-Vision-Adjustable-Lightweight/dp/B0CJVDBZW3/ref=sr_1_5)                                  | Amazon   | $7     |
+| [Mini freezer (-20°C, manual defrost NOT frost-free)](https://www.amazon.com/Whynter-CUF-110B-Energy-Upright-Freezer/dp/B00M7GMEYK/ref=sr_1_3)              | Amazon   | $195   |
+| [Kim wipes](https://www.amazon.com/Kimwipes-Delicate-Task-Wipers-1-Ply/dp/B07B7FJQVQ/ref=sr_1_4)                                                            | Amazon   | $8     |
+| [Tube freezer storage box](https://www.amazon.ca/PATIKIL-Centrifuge-Freezer-Waterproof-Cardboard/dp/B0D73Z5GHN)                                             | Amazon   | $15    |
+| [Tube rack](https://www.amazon.ca/Multifunctional-Test-Tube-Trapezoidal-0-2ml-50ml/dp/B082R2TJMT)                                                           | Amazon   | $18    |
+| [Isopropyl alcohol cleaning spray](https://www.amazon.com/Isopropyl-Alcohol-Spray-Surface-Cleaning/dp/B0G5YX5KY9/ref=pd_sbs_d_sccl_1_7/145-7565736-7548946) | Amazon   | $14    |
+| [Sterile nylon flocked nasal swabs](https://www.amazon.com/Nasopharyngeal-Specimen-Individually-Flocking-Sampling/dp/B0GWZWML23/)                           | Amazon   | $40    |
+| [10µL pipette tips](https://www.biobasic.com/us/0-1-10ul-micro-tip-natural-sterile-96-rack-4230)                                                            | BioBasic | $5     |
+| [100µL pipette tips](https://www.biobasic.com/us/10-100ul-filter-tip-natural-sterile-96-rack-4229)                                                          | BioBasic | $5     |
+| [1000µL pipette tips](https://www.biobasic.com/us/100-1000ul-filter-tip-natural-sterile-100-rack-4228)                                                      | BioBasic | $6     |
+| [1.5mL tubes](https://www.biobasic.com/us/1-5ml-skirted-tube-with-screw-cap-sterile-red-500-bag)                                                            | BioBasic | $37    |
+| [EZ-10 Spin Column Viral DNA Miniprep Kit](https://www.biobasic.com/us/ez-10-spin-column-viral-dna-miniprep-kit-4909)                                       | BioBasic | $138   |
+| [Vornado miniature vortexer](https://www.biobasic.com/us/miniature-vortex-mixer-with-blue-cup-head-100-to-240v-with-us-plug)                                | BioBasic | $220   |
+| [Denatured ethanol, anhydrous 80%+](https://www.biobasic.com/ethanol-anhydrous-85)                                                                          | BioBasic | $15    |
+| [mini8x thermocycler](https://www.minipcr.com/product/minipcr-mini8x-thermal-cycler/)                                                                       | miniPCR  | $600   |
+| [P51 molecular flouresence viewer](https://www.minipcr.com/product/p51-molecular-glow-lab/)                                                                 | miniPCR  | $35    |
+| [GyroPlus microcentrifuge](https://www.minipcr.com/product/gyro-microcentrifuge-variable-speed/)                                                            | miniPCR  | $220   |
+| [PCR tubes](https://www.minipcr.com/product/pcr-tubes-thin-walled-0-2-ml-bag-of-1000/)                                                                      | miniPCR  | $82    |
+| [SARS-CoV-2 RUO qPCR Primer & Probe Kit](https://www.idtdna.com/pages/landing/coronavirus-research-reagents/cdc-assays)                                     | IDT      | $122   |
+| [PrimeTime One-Step RT-qPCR Master Mix](https://www.idtdna.com/pages/products/qpcr-and-pcr/gene-expression/primetime-one-step-rt-qpcr-master-mix)           | IDT      | $173   |
+| [Nuclease free water (10x 2mL)](https://www.idtdna.com/site/order/stock/index/water)                                                                        | IDT      | $18    |
+| Total                                                                                                                                                       |          | $2,118 |
+
+After this, you'll have a lab bench that looks something like this:
+
+<Figure
+  src={imgSetup}
+  alt="Tweet saying 'My son came down with a cold 17 days ago. He wore a mask when around the family until his symptoms were done 11 days ago. Yesterday I came down with a cold too. Nobody else in the family has had cold symptoms in this time'. 54% predicted I caught my son's cold."
+  caption="Most people predicted I caught my son's cold"
+  width="600px"
+/>
+
+## Performing one test
+
+## Conclusion
+
+
+
+
