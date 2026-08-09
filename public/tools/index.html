@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Declared here as well as in CSS so the browser paints the right canvas
+     colour before the stylesheet is parsed, rather than flashing white. -->
+<meta name="color-scheme" content="light dark">
+<title>Lab tools</title>
+<!-- Same inline notebook-and-flask favicon as the tools themselves, so the
+     whole /tools/ area reads as one thing in the tab strip. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%23262b31' stroke-width='2' stroke-linejoin='round'%3E%3Crect x='4' y='3' width='19' height='26' rx='2.5' fill='%23fbf9f2'/%3E%3Cpath d='M9.5 3v26'/%3E%3C/g%3E%3Cg stroke='%23a8b0b9' stroke-width='1.7' stroke-linecap='round'%3E%3Cpath d='M13 9.5h6'/%3E%3Cpath d='M13 13.5h6'/%3E%3C/g%3E%3Cpath d='M19.5 16.5v5L15.6 27.8A1.7 1.7 0 0 0 17 30.4h8.6a1.7 1.7 0 0 0 1.4-2.6L23.1 21.5v-5z' fill='%2334c26b' stroke='%23262b31' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M18 16.5h6.6' stroke='%23262b31' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* Palette lifted from inventory.html so the index and the tools it lists
+   don't look like they came from different sites. */
+:root {
+  color-scheme: light dark;
+
+  --bg:        light-dark(#fbfbfa, #17181a);
+  --panel:     light-dark(#ffffff, #1f2124);
+  --panel-2:   light-dark(#f2f2f0, #26282c);
+  --ink:       light-dark(#1a1c1e, #e8e9ea);
+  --ink-dim:   light-dark(#6b7075, #9aa0a6);
+  --line:      light-dark(#dcdcd8, #34373b);
+  --accent:    light-dark(#2f6fdd, #7aa7f5);
+}
+
+body {
+  margin: 0;
+  padding: 40px 24px 64px;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+main { max-width: 40rem; margin: 0 auto; }
+
+h1 { font-size: 20px; margin: 0 0 6px; letter-spacing: -0.01em; }
+p.intro { color: var(--ink-dim); margin: 0 0 28px; font-size: 13.5px; }
+
+ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+li {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+li a {
+  display: block; padding: 14px 16px;
+  color: inherit; text-decoration: none; border-radius: inherit;
+}
+li a:hover, li a:focus-visible { background: var(--panel-2); }
+li a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.name { font-weight: 600; color: var(--accent); }
+.desc { color: var(--ink-dim); font-size: 13px; margin-top: 2px; }
+</style>
+</head>
+<body>
+
+<main>
+  <h1>Lab tools</h1>
+  <p class="intro">
+    Small browser tools I use with my private git repositories, which hold the
+    data for my home molecular biology experiments. They read their data from a
+    local folder on the machine you open them on — there is no data here, and
+    nothing is uploaded anywhere. Without a copy of those repositories they
+    won't be much use to anyone but me; they live at a public URL only so I can
+    find them without remembering where I put them.
+  </p>
+
+  <ul>
+    <li>
+      <a href="inventory.html">
+        <div class="name">Inventory</div>
+        <div class="desc">
+          Samples, pathogens, primer designs and reagents from the MolBioLab
+          CSVs, in a sortable and filterable table, plus per-person sampling
+          coverage. Watches the folder, so edits to a CSV show up on their own.
+        </div>
+      </a>
+    </li>
+  </ul>
+</main>
+
+</body>
+</html>
