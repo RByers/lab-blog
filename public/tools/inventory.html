@@ -341,6 +341,7 @@ table.stat td.blank { color: var(--ink-dim); }
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-samples" aria-selected="true">Samples</button>
     <button role="tab" id="tab-pathogens" aria-selected="false">Pathogens</button>
+    <button role="tab" id="tab-species" aria-selected="false">Species</button>
     <button role="tab" id="tab-primers" aria-selected="false">Primers</button>
     <button role="tab" id="tab-reagents" aria-selected="false">Reagents</button>
     <button role="tab" id="tab-stats" aria-selected="false">Stats</button>
@@ -370,7 +371,7 @@ table.stat td.blank { color: var(--ink-dim); }
 <section class="landing hidden" id="landing">
   <div class="card" id="card">
     <h2>Open your lab data folder</h2>
-    <p>Pick the folder holding <code>samples.csv</code> and <code>pathogens.csv</code> (plus <code>primers.csv</code> for result colouring, and <code>reagents.csv</code> for that tab) — the repo root or its <code>data/</code> folder both work. Nothing leaves this machine; the page only reads the files.</p>
+    <p>Pick the folder holding <code>samples.csv</code> and <code>pathogens.csv</code> (plus <code>primers.csv</code> for result colouring, and <code>species.csv</code> / <code>reagents.csv</code> for those tabs) — the repo root or its <code>data/</code> folder both work. Nothing leaves this machine; the page only reads the files.</p>
     <div class="row">
       <button class="btn primary hidden" id="reopen">Reopen</button>
       <button class="btn" id="pickDir">Choose folder…</button>
@@ -623,6 +624,25 @@ const VIEWS = {
       { k: "Notes",    t: T.clip, off: true },
     ],
   },
+  species: {
+    file: "species.csv",
+    key: "Species",
+    optional: true,
+    // Order is Virus / Bacteria / Fungus — "what kind of thing is this", not
+    // the taxonomic rank of that name (see data/species.md)
+    group: "Order",
+    groupBlank: "(no order)",
+    cols: [
+      { k: "Species", t: T.flag, title: "The short label the rest of the repo joins on" },
+      { k: "Name",    t: T.clip },
+      { k: "Order",   t: T.flag, off: true },   // it's the group heading
+      { k: "Pathogenicity", t: T.flag,
+        title: "Commensal = part of a healthy respiratory microbiome, so a detection isn't by itself a finding" },
+      { k: "Genome",  t: T.flag },
+      { k: "RefSeq",  t: T.flag, off: true, title: "Reference genome, where the lab has settled on one" },
+      { k: "Notes",   t: T.clip },
+    ],
+  },
   primers: {
     file: "primers.csv",
     key: "Label",
@@ -704,6 +724,7 @@ for (const v of VNAMES) {
 state.sort.samples = { k: "Date", dir: 0 };    // grouped by cold episode
 state.sort.reagents = { k: "Label", dir: 1 };
 state.sort.primers = { k: "Label", dir: 1 };   // a reference table, not events
+state.sort.species = { k: "Species", dir: 1 };
 
 /* Everything the user has adjusted is persisted, so a reload comes back to the
    same screen: which tab, sort per tab, hidden columns, column filters,
@@ -804,7 +825,7 @@ const NEEDED = ["samples.csv", "pathogens.csv"];
 // primers.csv: its Species column says what each assay detects, which is what
 // lets a row be coloured from `Confirmed+`. Without it, colour falls back to
 // pathogens.csv alone.
-const OPTIONAL = ["reagents.csv", "primers.csv"];
+const OPTIONAL = ["reagents.csv", "primers.csv", "species.csv"];
 const ALL_FILES = [...NEEDED, ...OPTIONAL];
 
 async function readAll(base) {
@@ -957,6 +978,7 @@ function ingest(texts, label) {
   state.rows.pathogens = p.rows;
   state.rows.reagents = texts["reagents.csv"] ? toObjects(texts["reagents.csv"]).rows : [];
   state.rows.primers = texts["primers.csv"] ? toObjects(texts["primers.csv"]).rows : [];
+  state.rows.species = texts["species.csv"] ? toObjects(texts["species.csv"]).rows : [];
 
   // assay name -> species it detects (lower-cased keys; spellings drift in case)
   state.assaySpecies = new Map();
