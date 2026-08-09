@@ -717,6 +717,7 @@ const state = {
   coldSpan: new Map(),         // cold-episode id -> its newest date
   q: "",
   filters: {},                 // view -> col -> Set of allowed values
+  species: {},                 // view -> legend chip that is pressed, or ""
   hidden: {},
   sort: {},
   collapsed: {},               // view -> Set of collapsed group names
@@ -728,6 +729,7 @@ const state = {
 for (const v of VNAMES) {
   state.rows[v] = [];
   state.filters[v] = {};
+  state.species[v] = "";
   state.collapsed[v] = new Set();
   state.sort[v] = { k: "Date", dir: -1 };   // samples overridden to cold order below
   state.hidden[v] = new Set(VIEWS[v].cols.filter(c => c.off).map(c => c.k));
@@ -750,7 +752,8 @@ function savePrefs() {
         Object.entries(state.filters[v]).map(([k, set]) => [k, [...set]]));
     }
     localStorage.setItem(LS, JSON.stringify(
-      { view: state.view, sort: state.sort, hidden, filters, collapsed, q: state.q }));
+      { view: state.view, sort: state.sort, hidden, filters, collapsed,
+        species: state.species, q: state.q }));
   } catch {}
 }
 function loadPrefs() {
@@ -770,6 +773,11 @@ function loadPrefs() {
         Object.entries(f).filter(([, arr]) => Array.isArray(arr))
               .map(([k, arr]) => [k, new Set(arr)]));
     }
+    // a pressed chip only means anything next to the filter it created, so it
+    // is dropped if that filter didn't survive alongside it
+    if (p.species) for (const v of VNAMES)
+      if (typeof p.species[v] === "string" && state.filters[v].Species)
+        state.species[v] = p.species[v];
     if (typeof p.q === "string") state.q = p.q;
   } catch {}
 }
@@ -1330,7 +1338,7 @@ function renderLegend(rows) {
   // on the wheel, which is the adjacency the warm band exists to avoid
   const order = [...counts.entries()].sort((a, b) =>
     isWarm(a[0]) - isWarm(b[0]) || hueOf(a[0]) - hueOf(b[0]) || a[0].localeCompare(b[0]));
-  const active = state.filters[state.view].Species;
+  const active = state.species[state.view];
   const el = $("#legend");
   el.replaceChildren();
   // reagents have no species at all; a view with nothing but commensals still
@@ -1342,7 +1350,7 @@ function renderLegend(rows) {
     const b = document.createElement("button");
     b.className = "chip";
     paint(b, s);
-    b.setAttribute("aria-pressed", active ? [...active].some(v => v.split(" + ").includes(s)) : false);
+    b.setAttribute("aria-pressed", active === s);
     b.innerHTML = `<span class="sw"></span>${esc(s)} <span class="n">${n}${seqCounts.get(s) ? "·" + seqCounts.get(s) + "seq" : ""}</span>`;
     b.title = `${n} ${state.view === "samples" ? "sample" : "record"}${n > 1 ? "s" : ""}` +
       (seqCounts.get(s) ? `, ${seqCounts.get(s)} sequenced` : "") + " — click to filter";
@@ -1456,13 +1464,19 @@ function renderStats() {
   wrap.append(t);
 }
 
+/* Which chip is pressed is UI state, not something to be read back out of the
+   filter it produced: a coinfection lands in the filter as the whole cell value
+   ("RSV-A + Rhinovirus"), so inferring pressed-ness from the filter would light
+   up every species named in it rather than the one that was clicked. */
 function toggleSpecies(s) {
-  const f = state.filters[state.view];
-  const all = new Set();
-  for (const r of state.rows[state.view]) if (speciesOf(r).includes(s)) all.add(r.Species || "");
-  const cur = f.Species;
-  const already = cur && [...cur].every(v => all.has(v)) && cur.size === all.size;
-  if (already) delete f.Species; else f.Species = all;
+  const v = state.view, f = state.filters[v];
+  if (state.species[v] === s) { state.species[v] = ""; delete f.Species; }
+  else {
+    state.species[v] = s;
+    const all = new Set();
+    for (const r of state.rows[v]) if (speciesOf(r).includes(s)) all.add(r.Species || "");
+    f.Species = all;
+  }
   render();
 }
 
@@ -1518,6 +1532,9 @@ function openFilter(k, anchor) {
   const commit = () => {
     if (sel.size === values.length) delete state.filters[v][k];
     else state.filters[v][k] = new Set(sel);
+    // the column menu can express selections no single chip stands for, so a
+    // chip left pressed here would be claiming credit for someone else's filter
+    if (k === "Species") state.species[v] = "";
     render();
   };
   pop.querySelector("input[type=search]").addEventListener("input", e => draw(e.target.value.toLowerCase().trim()));
@@ -1563,7 +1580,8 @@ for (const t of TABS)
   $("#tab-" + t).addEventListener("click", () => { state.view = t; render(); });
 $("#q").addEventListener("input", e => { state.q = e.target.value; render(); });
 $("#clearBtn").addEventListener("click", () => {
-  state.filters[state.view] = {}; state.q = ""; $("#q").value = ""; render();
+  state.filters[state.view] = {}; state.species[state.view] = "";
+  state.q = ""; $("#q").value = ""; render();
 });
 $("#reloadBtn").addEventListener("click", reload);
 $("#live").addEventListener("animationend", e => { e.target.hidden = true; });
