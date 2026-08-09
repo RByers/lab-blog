@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MolBioLab — Inventory</title>
+<!-- Inline SVG favicon: a lab notebook with a flask, so the file stays
+     self-contained (no sidecar .ico to lose when it's copied around). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%23262b31' stroke-width='2' stroke-linejoin='round'%3E%3Crect x='4' y='3' width='19' height='26' rx='2.5' fill='%23fbf9f2'/%3E%3Cpath d='M9.5 3v26'/%3E%3C/g%3E%3Cg stroke='%23a8b0b9' stroke-width='1.7' stroke-linecap='round'%3E%3Cpath d='M13 9.5h6'/%3E%3Cpath d='M13 13.5h6'/%3E%3C/g%3E%3Cpath d='M19.5 16.5v5L15.6 27.8A1.7 1.7 0 0 0 17 30.4h8.6a1.7 1.7 0 0 0 1.4-2.6L23.1 21.5v-5z' fill='%2334c26b' stroke='%23262b31' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M18 16.5h6.6' stroke='%23262b31' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+<style>
+/* ---------- theme ---------- */
+:root {
+  color-scheme: light dark;
+
+  --bg:        light-dark(#fbfbfa, #17181a);
+  --panel:     light-dark(#ffffff, #1f2124);
+  --panel-2:   light-dark(#f2f2f0, #26282c);
+  --ink:       light-dark(#1a1c1e, #e8e9ea);
+  --ink-dim:   light-dark(#6b7075, #9aa0a6);
+  --line:      light-dark(#dcdcd8, #34373b);
+  --line-hard: light-dark(#b9b9b4, #4a4e53);
+  --accent:    light-dark(#2f6fdd, #7aa7f5);
+  --focus:     light-dark(#2f6fdd, #7aa7f5);
+
+  /* Row tint: lightness / chroma for un-sequenced vs sequenced.
+     These are bare numbers fed to oklch(), so they can't use light-dark()
+     (that function only produces colours) — hence the media query below. */
+  --tint-l:      0.945;
+  --tint-c:      0.045;
+  --tint-l-seq:  0.845;
+  --tint-c-seq:  0.105;
+  --tint-hover: -0.035;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --tint-l:      0.265;
+    --tint-c:      0.040;
+    --tint-l-seq:  0.415;
+    --tint-c-seq:  0.090;
+    --tint-hover:  0.045;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 13px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* column flex rather than fixed grid rows: bars above the table come and go
+     (the notice, the legend), and a row template has to be recounted every
+     time one is added */
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+body > * { flex: none; }
+body > :is(.scroll, .landing) { flex: 1 1 auto; min-height: 0; }
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+
+/* ---------- top bar ---------- */
+header {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 8px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+h1 {
+  font-size: 14px; font-weight: 650; margin: 0 4px 0 0; letter-spacing: -0.01em;
+  display: flex; align-items: baseline; gap: 7px;
+}
+h1 small { font-weight: 400; color: var(--ink-dim); font-size: 11px; }
+
+.tabs { display: flex; background: var(--panel-2); border-radius: 7px; padding: 2px; }
+.tabs button {
+  border: 0; background: none; padding: 4px 12px; border-radius: 5px;
+  color: var(--ink-dim); font-weight: 550;
+}
+.tabs button[aria-selected="true"] {
+  background: var(--panel); color: var(--ink);
+  box-shadow: 0 1px 2px light-dark(rgb(0 0 0 / .18), rgb(0 0 0 / .5));
+}
+
+.btn {
+  border: 1px solid var(--line-hard); background: var(--panel);
+  padding: 4px 10px; border-radius: 6px; white-space: nowrap;
+}
+.btn:hover { background: var(--panel-2); }
+.btn.primary { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131a); font-weight: 600; }
+.btn[aria-expanded="true"] { background: var(--panel-2); border-color: var(--line-hard); }
+
+.search {
+  border: 1px solid var(--line-hard); background: var(--panel);
+  border-radius: 6px; padding: 4px 8px; min-width: 15rem; flex: 1 1 15rem; max-width: 26rem;
+}
+.search::placeholder { color: var(--ink-dim); }
+:is(.btn, .search, .tabs button, input, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 1px;
+}
+
+.spacer { flex: 1 1 0; }
+.count { color: var(--ink-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.count b { color: var(--ink); font-weight: 600; }
+
+/* ---------- notice bar ---------- */
+.notice {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 6px 12px; border-bottom: 1px solid var(--line);
+  background: light-dark(#fff6e0, #3a3016);
+  color: light-dark(#5c4708, #f0dfae);
+  font-size: 12px;
+}
+.notice.hidden { display: none; }
+.notice .x { margin-left: auto; border: 0; background: none; color: inherit; padding: 0 4px; opacity: .7; }
+.notice .x:hover { opacity: 1; }
+
+/* ---------- legend ---------- */
+.legend {
+  display: flex; gap: 5px; flex-wrap: wrap; align-items: center;
+  padding: 7px 12px; border-bottom: 1px solid var(--line); background: var(--bg);
+}
+.legend .lbl { color: var(--ink-dim); margin-right: 2px; }
+.chip {
+  --tl: var(--tint-l); --tc: var(--tint-c);
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid transparent; border-radius: 999px; padding: 2px 9px 2px 6px;
+  background: oklch(var(--tl) var(--tc) var(--h, 0));
+  color: light-dark(#15171a, #eceef0);
+  font-size: 11.5px; font-weight: 550;
+}
+.chip .n { color: light-dark(#00000090, #ffffff90); font-variant-numeric: tabular-nums; }
+.chip .sw {
+  width: 9px; height: 9px; border-radius: 2px; flex: none;
+  background: oklch(var(--tint-l-seq) var(--tint-c-seq) var(--h, 0));
+  outline: 1px solid light-dark(#0003, #fff3);
+}
+button.chip:hover { border-color: var(--line-hard); }
+button.chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.legend .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
+.legend .note { color: var(--ink-dim); font-size: 11.5px; }
+.legend .note .dk {
+  display: inline-block; width: 22px; height: 10px; vertical-align: -1px; border-radius: 3px;
+  background: linear-gradient(90deg,
+    oklch(var(--tint-l) var(--tint-c) 145), oklch(var(--tint-l-seq) var(--tint-c-seq) 145));
+  outline: 1px solid light-dark(#0002, #fff2);
+}
+
+/* ---------- table ---------- */
+.scroll { overflow: auto; overscroll-behavior: contain; }
+table { border-collapse: separate; border-spacing: 0; width: max-content; min-width: 100%; }
+
+thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: var(--panel); border-bottom: 1px solid var(--line-hard);
+  padding: 0; text-align: left; font-weight: 600; white-space: nowrap;
+  /* so a heading pinned against the sticky Label column gets trimmed at the
+     column's right edge (…from the right) rather than sliding out of sight
+     under it (which showed "Prob" as a bare "b"). */
+  overflow: hidden;
+}
+thead th .h {
+  display: flex; align-items: center; gap: 2px; padding: 5px 4px 5px 8px;
+  position: sticky; left: var(--stick, 0px);
+}
+thead th:first-child .h { position: static; }
+thead th .name {
+  cursor: pointer; user-select: none; display: flex; align-items: center; gap: 4px;
+  min-width: 0;
+}
+thead th .name .txt { overflow: hidden; text-overflow: ellipsis; }
+thead th .name:hover { color: var(--accent); }
+thead th .arrow { color: var(--accent); font-size: 10px; width: 8px; flex: none; }
+.funnel {
+  border: 0; background: none; color: var(--ink-dim); padding: 3px; border-radius: 4px;
+  line-height: 0; opacity: .45; flex: none;
+}
+.funnel svg { display: block; width: 11px; height: 11px; }
+.funnel svg path {
+  stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; fill: none;
+}
+th:hover .funnel, .funnel[data-on] { opacity: 1; }
+.funnel[data-on] { color: var(--accent); background: light-dark(#2f6fdd18, #7aa7f528); }
+
+tbody td {
+  padding: 3px 8px; border-bottom: 1px solid light-dark(#00000012, #ffffff10);
+  vertical-align: top; max-width: 34rem;
+}
+tbody tr {
+  --h: 0; --tl: var(--tint-l); --tc: 0; --hov: 0;
+  background: oklch(calc(var(--tl) + var(--hov)) var(--tc) var(--h));
+}
+tbody tr[data-sp] { --tc: var(--tint-c); }
+tbody tr[data-sp][data-seq] { --tl: var(--tint-l-seq); --tc: var(--tint-c-seq); }
+tbody tr:hover { --hov: var(--tint-hover); }
+tbody tr[data-sp][data-seq] > td:first-child {
+  box-shadow: inset 3px 0 0 oklch(from oklch(var(--tl) var(--tc) var(--h)) calc(l - .3) calc(c + .06) h);
+}
+
+/* first column sticks */
+th:first-child, td:first-child { position: sticky; left: 0; z-index: 2; }
+thead th:first-child { z-index: 4; }
+tbody td:first-child {
+  background: inherit; font-weight: 600; white-space: nowrap;
+  border-right: 1px solid light-dark(#00000018, #ffffff14);
+}
+
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.nowrap { white-space: nowrap; }
+td.clip { max-width: 26rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+td.clip.open { white-space: pre-wrap; max-width: 46rem; }
+td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; }
+td.seqtext { max-width: 18rem; }
+td.narrow { max-width: 7rem; }
+td.narrow.open { max-width: 26rem; }
+/* high subjective probability of a real infection, but nothing ever found */
+td.unexplained { color: light-dark(#b3261e, #ff9a90); font-weight: 700; }
+tbody tr.dim { opacity: .55; }
+
+/* cold-episode grouping: hairlines inside an episode, hard lines between, and
+   a bar down the far left tying an episode's swabs together. The bar stops
+   short of the first and last row's edges so a group reads as one run. */
+tbody.cold td { border-bottom-color: var(--line-hard); }
+tbody.cold tr[data-samecold] td { border-bottom-color: light-dark(#0000000d, #ffffff0a); }
+tbody.cold td:first-child { padding-left: 15px; }
+tbody.cold tr[data-cold] td:first-child::before {
+  content: ""; position: absolute; left: 6px; width: 3px; top: 0; bottom: -1px;
+  background: light-dark(#00000038, #ffffff40);
+}
+tbody.cold tr[data-cold="first"] td:first-child::before { top: 9px; border-radius: 2px 2px 0 0; }
+tbody.cold tr[data-cold="last"] td:first-child::before { bottom: 9px; border-radius: 0 0 2px 2px; }
+
+/* grouped views (reagents by category) */
+tr.grp td {
+  position: static; background: var(--panel-2); font-weight: 650; white-space: nowrap;
+  padding: 4px 8px; border-top: 1px solid var(--line-hard);
+  border-bottom: 1px solid var(--line-hard); cursor: pointer;
+}
+tr.grp td:hover { color: var(--accent); }
+tr.grp .n { color: var(--ink-dim); font-weight: 400; font-variant-numeric: tabular-nums; }
+tr.grp .tw { display: inline-block; width: 10px; color: var(--ink-dim); }
+
+.badge {
+  display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: light-dark(#00000012, #ffffff18);
+}
+.tick { color: light-dark(#1a7f37, #56d364); font-weight: 700; }
+
+/* ---------- stats ---------- */
+.stats { padding: 16px 14px 40px; overflow: auto; }
+.stats h2 { margin: 0 0 3px; font-size: 14px; }
+.stats p.sub { margin: 0 0 14px; color: var(--ink-dim); font-size: 11.5px; max-width: 46rem; }
+table.stat { border-collapse: separate; border-spacing: 0; width: max-content; }
+table.stat th, table.stat td {
+  border-bottom: 1px solid var(--line); padding: 4px 12px; white-space: nowrap;
+}
+table.stat thead th {
+  position: sticky; top: 0; background: var(--panel); border-bottom: 1px solid var(--line-hard);
+  text-align: right; overflow: visible;
+}
+table.stat thead th:first-child { text-align: left; }
+table.stat tbody th {
+  text-align: left; font-weight: 600; position: sticky; left: 0;
+  background: var(--bg); border-right: 1px solid var(--line);
+}
+table.stat td { text-align: right; font-variant-numeric: tabular-nums; }
+table.stat tr.sep th, table.stat tr.sep td { border-top: 1px solid var(--line-hard); }
+/* the heat wash is always a light green, so its text is always dark */
+table.stat td.heat { background: oklch(var(--hl) var(--hc) 148); color: #15171a; }
+table.stat tbody tr:hover th, table.stat tbody tr:hover td:not(.heat) {
+  background: var(--panel-2);
+}
+table.stat td.blank { color: var(--ink-dim); }
+
+/* ---------- popovers ---------- */
+[popover] {
+  position: fixed; margin: 0; inset: auto;
+  border: 1px solid var(--line-hard); border-radius: 9px; padding: 0;
+  background: var(--panel); color: var(--ink);
+  box-shadow: 0 10px 30px light-dark(rgb(0 0 0 / .18), rgb(0 0 0 / .55));
+  max-height: min(60vh, 30rem); overflow: auto; min-width: 13rem;
+}
+[popover]::backdrop { background: transparent; }
+.menu-head {
+  position: sticky; top: 0; background: var(--panel); padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--line); display: flex; gap: 6px; align-items: center;
+}
+.menu-head input { flex: 1; min-width: 0; border: 1px solid var(--line-hard); border-radius: 5px; padding: 3px 6px; background: var(--bg); }
+.menu-head .lnk { border: 0; background: none; color: var(--accent); padding: 2px 4px; font-size: 11.5px; }
+.menu-body { padding: 5px; }
+.menu-body label {
+  display: flex; gap: 7px; align-items: center; padding: 3px 7px; border-radius: 5px; cursor: pointer;
+}
+.menu-body label:hover { background: var(--panel-2); }
+.menu-body label span.v { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-body label span.c { color: var(--ink-dim); font-variant-numeric: tabular-nums; font-size: 11px; }
+.menu-body .empty { color: var(--ink-dim); padding: 6px 8px; }
+
+/* ---------- landing ---------- */
+.landing { display: grid; place-items: center; padding: 24px; overflow: auto; }
+.card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  padding: 26px 30px; max-width: 34rem; text-align: center;
+  box-shadow: 0 1px 3px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .4));
+}
+.card h2 { margin: 0 0 6px; font-size: 17px; }
+.card p { color: var(--ink-dim); margin: 0 0 16px; }
+.card .row { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.card .btn { padding: 7px 16px; }
+.card .hint { margin-top: 16px; font-size: 11.5px; color: var(--ink-dim); }
+.card code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 11px; }
+.drop { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.err { color: light-dark(#b3261e, #ff8a80); margin-top: 12px; min-height: 1em; font-size: 12px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>MolBioLab <small id="src">no data</small></h1>
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-samples" aria-selected="true">Samples</button>
+    <button role="tab" id="tab-pathogens" aria-selected="false">Pathogens</button>
+    <button role="tab" id="tab-reagents" aria-selected="false">Reagents</button>
+    <button role="tab" id="tab-stats" aria-selected="false">Stats</button>
+  </div>
+  <input class="search" id="q" type="search" placeholder="Search all columns…" autocomplete="off">
+  <button class="btn" id="colsBtn" popovertarget="colsMenu" aria-expanded="false">Columns</button>
+  <button class="btn hidden" id="clearBtn">Clear filters</button>
+  <div class="spacer"></div>
+  <span class="count" id="count"></span>
+  <button class="btn" id="reloadBtn" title="Re-read the CSVs from disk">↻</button>
+  <button class="btn" id="folderBtn">Folder…</button>
+</header>
+
+<div class="notice hidden" id="notice"></div>
+
+<div class="legend" id="legend"></div>
+
+<main class="scroll" id="tableWrap">
+  <table>
+    <thead><tr id="thead"></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</main>
+
+<section class="scroll stats hidden" id="statsWrap"></section>
+
+<section class="landing hidden" id="landing">
+  <div class="card" id="card">
+    <h2>Open your lab data folder</h2>
+    <p>Pick the folder holding <code>samples.csv</code> and <code>pathogens.csv</code> (plus <code>primers.csv</code> for result colouring, and <code>reagents.csv</code> for that tab) — the repo root or its <code>data/</code> folder both work. Nothing leaves this machine; the page only reads the files.</p>
+    <div class="row">
+      <button class="btn primary hidden" id="reopen">Reopen</button>
+      <button class="btn" id="pickDir">Choose folder…</button>
+      <button class="btn" id="pickFiles">Choose files…</button>
+    </div>
+    <p class="hint">…or drop the folder (or the two CSVs) anywhere on this page.</p>
+    <p class="err" id="err"></p>
+  </div>
+</section>
+
+<div popover id="colsMenu"></div>
+<div popover id="filterMenu"></div>
+
+<input type="file" id="dirInput" webkitdirectory directory multiple class="hidden">
+<input type="file" id="fileInput" accept=".csv" multiple class="hidden">
+
+<script>
+"use strict";
+
+/* ============================ CSV ============================ */
+function parseCSV(text) {
+  text = text.replace(/^﻿/, "");
+  const rows = []; let row = [], field = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"') q = true;
+    else if (c === ",") { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(field); field = ""; rows.push(row); row = [];
+    } else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim() !== ""));
+}
+function toObjects(text) {
+  const rows = parseCSV(text);
+  if (!rows.length) return { cols: [], rows: [] };
+  const cols = rows[0].map(h => h.trim());
+  return { cols, rows: rows.slice(1).map(r => Object.fromEntries(cols.map((c, i) => [c, (r[i] ?? "").trim()]))) };
+}
+
+/* ======================= species → colour ======================= */
+// hue on the oklch wheel; lightness/chroma come from CSS (theme-aware)
+const HUES = [
+  [/^HRV-A/i, 155], [/^HRV-B/i, 180], [/^HRV-C/i, 138], [/^(HRV|RV)$/i, 147], [/^ENT|^EV/i, 166],
+  [/^SARS|^SC2|COV-?2/i, 27],
+  [/^INFA|^FLUA|^IAV/i, 95], [/^INFB|^FLUB|^IBV/i, 78], [/^INF|^FLU/i, 88],
+  [/^RSVA/i, 52], [/^RSVB/i, 38], [/^RSV/i, 45],
+  [/^OC43/i, 320], [/^HKU1/i, 311], [/^NL63/i, 329], [/^229E/i, 303], [/CORONA/i, 320],
+  [/^H?PIV1/i, 254], [/^H?PIV2/i, 246], [/^H?PIV3/i, 262], [/^H?PIV4/i, 271],
+  [/^PIV|^HPIV/i, 262], [/^MPV|^HMPV/i, 235],
+  [/^ADV|ADENO/i, 207], [/^VZV|^HSV|HERPES/i, 300], [/^HBOV|BOCA/i, 288],
+  // Bacteria and fungi, from the YouSeq panel. Specific patterns first: several
+  // unrelated organisms are "…pneumo…", so a loose /PNEUMO/ would swallow them.
+  [/^H\.?\s?influenzae|^HFLU|^HAEM/i, 12],
+  [/^S\.?\s?pneum/i, 5],
+  [/^S\.?\s?aureus|^STAPH/i, 358],
+  [/^S\.?\s?pyog|^GAS$/i, 349],
+  [/^M\.?\s?catar|^MORAX/i, 22],
+  [/^K\.?\s?pneum|^KLEBS/i, 16],
+  [/^A\.?\s?bauma|^ACINET/i, 336],
+  [/^B\.?\s?pertu/i, 8], [/^B\.?\s?parap/i, 30],
+  [/^P\.?\s?aerug|^PSEUD/i, 196],
+  [/^L\.?\s?pneum|^LEGION/i, 186],
+  [/^C\.?\s?pneum|^CHLAM/i, 176],
+  [/^Mp?\.?\s?pneum|^MYCO/i, 62],
+  [/^C\.?\s?albic|CANDIDA/i, 96],
+  [/^STREP|^BORD|BACT/i, 5],
+];
+const hueOf = s => (HUES.find(([re]) => re.test(s)) || [, 0])[1];
+const hasHue = s => HUES.some(([re]) => re.test(s));
+
+/* ================== Confirmed+ → assay names → species ==================
+   `Confirmed+` is free text but it has a grammar, documented in
+   data/samples.md under "Confirmed+ as structured data" and parsed the same
+   way by tools/check-data.py:
+
+     ENT rc (28.1, 27.8, 89°, 88.5°), HRV Ma (30)   -> ENT rc, HRV Ma
+
+   Split on commas *outside* parentheses (a Cq group can hold its own commas),
+   drop the parenthesised numbers, and skip anything with a trailing `?` — that
+   marks a call the experimenter didn't trust. A leading `~` (marginal) is
+   stripped but the hit still counts. */
+function assayNames(confirmed) {
+  const parts = [];
+  let depth = 0, cur = "";
+  for (const ch of confirmed || "") {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) { parts.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  parts.push(cur);
+
+  const out = [];
+  for (const p of parts) {
+    const name = p.replace(/\([^)]*\)/g, " ").replace(/\s+/g, " ").trim();
+    if (!name || name.endsWith("?")) continue;
+    const bare = name.replace(/^~+/, "").trim();
+    if (bare) out.push(bare);
+  }
+  return out;
+}
+
+// Species detected by this row's confirmed assays. Unresolvable names are
+// collected so the page can say so rather than silently colouring nothing.
+function confirmedSpecies(row, unknown) {
+  const out = [];
+  for (const name of assayNames(row["Confirmed+"])) {
+    const sp = state.assaySpecies.get(name.toLowerCase());
+    if (sp === undefined) { if (unknown) unknown.set(name, (unknown.get(name) || 0) + 1); continue; }
+    if (sp && !out.includes(sp)) out.push(sp);
+  }
+  return out;
+}
+
+/* ======================= column definitions ======================= */
+const T = {
+  txt:  {},
+  num:  { cls: "num", cmp: (a, b) => (parseFloat(a) || -Infinity) - (parseFloat(b) || -Infinity) },
+  date: { cls: "nowrap", cmp: (a, b) => (dnum(a) ?? -Infinity) - (dnum(b) ?? -Infinity) },
+  clip: { cls: "clip" },
+  narrow: { cls: "clip narrow" },
+  flag: { cls: "nowrap" },
+};
+function dnum(v) {
+  if (!v) return null;
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})(?:\s+(\d{1,2}):(\d{2})\s*([AP])M)?/i);
+  if (!m) return null;
+  let [, mo, d, y, h, mi, ap] = m;
+  y = +y; if (y < 100) y += 2000;
+  h = h ? +h % 12 + (/p/i.test(ap) ? 12 : 0) : 0;
+  return Date.UTC(y, mo - 1, d, h, +(mi || 0));
+}
+// label sort: S9 < S10, and S47 < S47b
+function labelKey(v) {
+  const m = String(v).match(/^([A-Za-z]*)(\d+)(.*)$/);
+  return m ? [m[1], +m[2], m[3]] : [String(v), 0, ""];
+}
+const cmpLabel = (a, b) => {
+  const [ap, an, as] = labelKey(a), [bp, bn, bs] = labelKey(b);
+  return ap.localeCompare(bp) || an - bn || as.localeCompare(bs);
+};
+
+const VIEWS = {
+  samples: {
+    file: "samples.csv",
+    key: "Label",
+    cols: [
+      { k: "Label",    t: { cls: "nowrap", cmp: cmpLabel } },
+      { k: "Date",     t: T.date },
+      { k: "Source",   t: T.narrow },
+      { k: "Species",  t: T.flag, derived: true },
+      { k: "Type",     t: T.flag, derived: true },
+      { k: "Seq",      t: T.flag, derived: true, off: true, title: "Sequencing run(s) this sample appears in" },
+      { k: "Symptoms", t: T.clip },
+      { k: "Prob",     t: T.num, title: "Subjective probability it's a real infection (0–10)" },
+      { k: "Day",      t: T.num, title: "Day of illness when sampled" },
+      { k: "Cold",     t: T.flag, title: "Label of the sample representing this illness episode (itself, if this is the primary)" },
+      { k: "Confirmed+", t: T.clip },
+      { k: "B2M",      t: T.num, title: "B2M host-control Cq" },
+      { k: "Negative", t: T.clip, off: true },
+      { k: "Sample",   t: T.clip, off: true },
+      { k: "Extraction", t: T.clip, off: true },
+      { k: "cDNA",     t: T.date, off: true },
+      { k: "Raw?",     t: T.flag, off: true },
+      { k: "Empty / Discarded", t: T.flag, off: true },
+      { k: "Note",     t: T.clip },
+    ],
+  },
+  pathogens: {
+    file: "pathogens.csv",
+    key: "Sample",
+    cols: [
+      { k: "Sample",   t: { cls: "nowrap", cmp: cmpLabel } },
+      { k: "Date",     t: T.date },
+      { k: "Source",   t: T.flag },
+      { k: "Species",  t: T.flag },
+      { k: "Type",     t: T.flag },
+      { k: "PCR Assay", t: T.flag },
+      { k: "Sequenced", t: T.clip },
+      { k: "Melt ENT rc", t: T.num, off: true },
+      { k: "Melt HRV ma", t: T.num, off: true },
+      { k: "Melt HRV bo", t: T.num, off: true },
+      { k: "RefSeq",   t: T.flag },
+      { k: "RefSeq Mismatches", t: T.num, off: true },
+      { k: "RefSeq Identity", t: T.num },
+      { k: "Closest",  t: T.flag },
+      { k: "Closest Mismatches", t: T.num, off: true },
+      { k: "Closest Identity", t: T.num },
+      { k: "Location", t: T.clip },
+      { k: "Sequence", t: { cls: "mono clip seqtext" }, off: true },
+      { k: "Notes",    t: T.clip, off: true },
+    ],
+  },
+  reagents: {
+    file: "reagents.csv",
+    key: "Label",
+    optional: true,
+    group: "Category",              // reagents are always grouped by what they are
+    groupBlank: "(no category)",
+    cols: [
+      { k: "Label",    t: { cls: "nowrap", cmp: cmpLabel } },
+      { k: "Lid",      t: T.flag, title: "Cap colour — how a tube is found in a box" },
+      { k: "Category", t: T.flag, off: true },   // it's the group heading
+      { k: "Description", t: T.clip },
+      { k: "Product",  t: T.clip },
+      { k: "Location", t: T.narrow },
+      { k: "Date aquired", t: T.date },
+      { k: "Use by",   t: T.date, off: true },
+      { k: "Notes",    t: T.clip },
+    ],
+  },
+};
+
+/* ============================ state ============================ */
+const LS = "molbiolab.inventory.v3";   // bumped: samples now default to cold order
+const VNAMES = Object.keys(VIEWS);
+const state = {
+  view: "samples",
+  rows: {},
+  byLabel: new Map(),          // sample label -> [pathogen rows]
+  colds: new Map(),            // sample label -> cold-episode id
+  coldSpan: new Map(),         // cold-episode id -> its newest date
+  q: "",
+  filters: {},                 // view -> col -> Set of allowed values
+  hidden: {},
+  sort: {},
+  collapsed: {},               // view -> Set of collapsed group names
+  dirHandle: null,
+  assaySpecies: new Map(),     // assays.csv: lower-cased Name -> Species
+  unknownAssays: new Map(),    // Confirmed+ names that assays.csv doesn't know
+};
+for (const v of VNAMES) {
+  state.rows[v] = [];
+  state.filters[v] = {};
+  state.collapsed[v] = new Set();
+  state.sort[v] = { k: "Date", dir: -1 };   // samples overridden to cold order below
+  state.hidden[v] = new Set(VIEWS[v].cols.filter(c => c.off).map(c => c.k));
+}
+state.sort.samples = { k: "Date", dir: 0 };    // grouped by cold episode
+state.sort.reagents = { k: "Label", dir: 1 };
+
+/* Everything the user has adjusted is persisted, so a reload comes back to the
+   same screen: which tab, sort per tab, hidden columns, column filters,
+   collapsed reagent groups and the search box. Sets serialize as arrays. */
+function savePrefs() {
+  try {
+    const hidden = {}, filters = {}, collapsed = {};
+    for (const v of VNAMES) {
+      hidden[v] = [...state.hidden[v]];
+      collapsed[v] = [...state.collapsed[v]];
+      filters[v] = Object.fromEntries(
+        Object.entries(state.filters[v]).map(([k, set]) => [k, [...set]]));
+    }
+    localStorage.setItem(LS, JSON.stringify(
+      { view: state.view, sort: state.sort, hidden, filters, collapsed, q: state.q }));
+  } catch {}
+}
+function loadPrefs() {
+  try {
+    const p = JSON.parse(localStorage.getItem(LS) || "null");
+    if (!p) return;
+    if (p.view === "stats" || p.view in VIEWS) state.view = p.view;
+    if (p.sort) for (const v of VNAMES) if (p.sort[v]) state.sort[v] = p.sort[v];
+    if (p.hidden) for (const v of VNAMES)
+      if (Array.isArray(p.hidden[v])) state.hidden[v] = new Set(p.hidden[v]);
+    if (p.collapsed) for (const v of VNAMES)
+      if (Array.isArray(p.collapsed[v])) state.collapsed[v] = new Set(p.collapsed[v]);
+    if (p.filters) for (const v of VNAMES) {
+      const f = p.filters[v];
+      if (!f || typeof f !== "object") continue;
+      state.filters[v] = Object.fromEntries(
+        Object.entries(f).filter(([, arr]) => Array.isArray(arr))
+              .map(([k, arr]) => [k, new Set(arr)]));
+    }
+    if (typeof p.q === "string") state.q = p.q;
+  } catch {}
+}
+
+/* ---- the chosen folder, remembered across reloads ----
+   A FileSystemDirectoryHandle is structured-cloneable, so IndexedDB can hold
+   it (localStorage can't — it's strings only). On the next visit the handle
+   comes back and only its *permission* needs renewing, which is the small
+   "let this site read files?" prompt rather than a fresh folder picker. */
+const IDB = "molbiolab", IDB_STORE = "handles", IDB_KEY = "dir";
+function idb() {
+  return new Promise((res, rej) => {
+    const rq = indexedDB.open(IDB, 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore(IDB_STORE);
+    rq.onsuccess = () => res(rq.result);
+    rq.onerror = () => rej(rq.error);
+  });
+}
+async function idbPut(val) {
+  try {
+    const db = await idb();
+    await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(val, IDB_KEY);
+      tx.oncomplete = res; tx.onerror = () => rej(tx.error);
+    });
+  } catch {}
+}
+async function idbGet() {
+  try {
+    const db = await idb();
+    return await new Promise((res, rej) => {
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const rq = tx.objectStore(IDB_STORE).get(IDB_KEY);
+      rq.onsuccess = () => res(rq.result || null);
+      rq.onerror = () => rej(rq.error);
+    });
+  } catch { return null; }
+}
+
+/* ===================== file loading (3 ways) ===================== */
+const $ = s => document.querySelector(s);
+const err = m => { $("#err").textContent = m || ""; };
+
+// Post-load warnings. #err lives on the landing card, which is hidden once
+// data is showing, so anything the user needs to see after a successful load
+// goes in the notice bar instead.
+function notice(m) {
+  const el = $("#notice");
+  el.replaceChildren();
+  el.classList.toggle("hidden", !m);
+  if (!m) return;
+  el.insertAdjacentHTML("beforeend", `<span>⚠ ${esc(m)}</span>`);
+  const x = document.createElement("button");
+  x.className = "x";
+  x.textContent = "✕";
+  x.title = "Dismiss";
+  x.addEventListener("click", () => notice(""));
+  el.append(x);
+}
+
+const NEEDED = ["samples.csv", "pathogens.csv"];
+// reagents.csv: its tab just stays empty if absent.
+// primers.csv: its Species column says what each assay detects, which is what
+// lets a row be coloured from `Confirmed+`. Without it, colour falls back to
+// pathogens.csv alone.
+const OPTIONAL = ["reagents.csv", "primers.csv"];
+const ALL_FILES = [...NEEDED, ...OPTIONAL];
+
+async function readAll(base) {
+  const texts = {};
+  for (const n of NEEDED) texts[n] = await (await (await base.getFileHandle(n)).getFile()).text();
+  for (const n of OPTIONAL) {
+    try { texts[n] = await (await (await base.getFileHandle(n)).getFile()).text(); } catch {}
+  }
+  return texts;
+}
+
+async function loadFromDirHandle(dir) {
+  let base = dir;
+  // allow picking either the repo root or the data/ folder
+  const names = new Set();
+  for await (const [n, h] of dir.entries()) if (h.kind === "file") names.add(n.toLowerCase());
+  if (!NEEDED.every(n => names.has(n))) {
+    try { base = await dir.getDirectoryHandle("data"); } catch { /* fall through to error */ }
+  }
+  const texts = await readAll(base);
+  state.dirHandle = base;
+  // Remember the folder the user picked (not `base`) so a later reopen goes
+  // through the same repo-root-or-data/ resolution.
+  idbPut(dir);
+  ingest(texts, dir.name + (base === dir ? "" : "/data"));
+}
+
+/* On startup, try the folder from last time. If the permission is still
+   granted the page just comes back up with data; if it needs renewing we show
+   a one-click Reopen, because requestPermission() must run from a user
+   gesture — and that prompt is the small Chrome permission bubble, not the
+   folder picker. */
+async function restoreDir() {
+  if (!window.showDirectoryPicker) return false;
+  const dir = await idbGet();
+  if (!dir) return false;
+  try {
+    if (await dir.queryPermission({ mode: "read" }) === "granted") {
+      await loadFromDirHandle(dir);
+      return true;
+    }
+  } catch { return false; }
+  offerReopen(dir);
+  return false;
+}
+
+function offerReopen(dir) {
+  const btn = $("#reopen");
+  btn.textContent = `Reopen ${dir.name}`;
+  btn.classList.remove("hidden");
+  btn.onclick = async () => {
+    try {
+      if (await dir.requestPermission({ mode: "read" }) !== "granted") return;
+      await loadFromDirHandle(dir);
+    } catch (e) { err(e.message); }
+  };
+}
+
+function loadFromFileList(files) {
+  const picked = {}; let label = "";
+  for (const f of files) {
+    const n = f.name.toLowerCase();
+    if (ALL_FILES.includes(n)) { picked[n] = f; label = (f.webkitRelativePath || f.name).split("/")[0] || "files"; }
+  }
+  const missing = NEEDED.filter(n => !picked[n]);
+  if (missing.length) { err("Couldn't find " + missing.join(" and ") + " in what you picked."); return Promise.resolve(); }
+  state.dirHandle = null;
+  const got = ALL_FILES.filter(n => picked[n]);
+  return Promise.all(got.map(n => picked[n].text())).then(vals => {
+    ingest(Object.fromEntries(got.map((n, i) => [n, vals[i]])), label);
+  });
+}
+
+function ingest(texts, label) {
+  err("");
+  const s = toObjects(texts["samples.csv"]);
+  const p = toObjects(texts["pathogens.csv"]);
+  if (!s.cols.includes("Label")) throw new Error("samples.csv has no Label column");
+  if (!p.cols.includes("Sample")) throw new Error("pathogens.csv has no Sample column");
+  state.rows.samples = s.rows;
+  state.rows.pathogens = p.rows;
+  state.rows.reagents = texts["reagents.csv"] ? toObjects(texts["reagents.csv"]).rows : [];
+
+  // assay name -> species it detects (lower-cased keys; spellings drift in case)
+  state.assaySpecies = new Map();
+  if (texts["primers.csv"]) {
+    for (const a of toObjects(texts["primers.csv"]).rows) {
+      const n = (a.Label || "").trim().toLowerCase();
+      if (n) state.assaySpecies.set(n, (a.Species || "").trim());
+    }
+  }
+
+  state.byLabel = new Map();
+  for (const r of p.rows) {
+    if (!state.byLabel.has(r.Sample)) state.byLabel.set(r.Sample, []);
+    state.byLabel.get(r.Sample).push(r);
+  }
+  // Fold pathogen info into the sample rows, then add anything `Confirmed+`
+  // establishes that pathogens.csv doesn't. A sample can be a confirmed HRV
+  // positive without a pathogens row of its own — most aren't primaries — and
+  // those rows should still read as "something was found here".
+  const unknownAssays = new Map();
+  for (const r of s.rows) {
+    const hits = state.byLabel.get(r.Label) || [];
+    const fromPath = hits.map(h => h.Species).filter(Boolean);
+    r.Type = hits.map(h => h.Type).filter(Boolean).join(" + ");
+    r.Seq = hits.map(h => h.Sequenced).filter(Boolean).join(" · ").replace(/\n/g, " ");
+    const all = [...fromPath];
+    for (const sp of confirmedSpecies(r, unknownAssays)) {
+      // Don't add a species already covered by a more specific one: `ENT rc`
+      // only establishes "HRV", which says nothing new next to pathogens.csv's
+      // `HRV-C`. Same for RSV vs RSVA/RSVB.
+      const low = sp.toLowerCase();
+      if (!all.some(x => x.toLowerCase().startsWith(low))) all.push(sp);
+    }
+    r.Species = all.join(" + ");
+  }
+  state.unknownAssays = unknownAssays;
+  findColds();
+  $("#src").textContent = label;
+  $("#landing").classList.add("hidden");
+  render();
+
+  // Say so rather than quietly leaving those rows uncoloured.
+  if (!texts["primers.csv"]) {
+    notice("No primers.csv in that folder — rows are coloured from pathogens.csv only.");
+  } else if (unknownAssays.size) {
+    const list = [...unknownAssays.entries()]
+      .sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n} (${c})`).join(", ");
+    notice(`Confirmed+ names ${unknownAssays.size} assay${unknownAssays.size > 1 ? "s" : ""} `
+         + `not in primers.csv: ${list}`);
+  } else {
+    notice("");
+  }
+}
+
+/* ===================== cold episodes =====================
+   `Cold` holds the label of the episode's primary sample, and every sample of
+   that episode carries the same value — so the column *is* the episode id and
+   there is nothing to infer. (This used to guess: same Source, within 14 days
+   of the previous swab. That merged Rick's Dec 2023 Tokyo cold with the
+   influenza he caught a week later, which is exactly why the column exists.)
+
+   A sample with a blank `Cold` isn't part of a tracked episode; it gets a
+   singleton id so it still sorts sensibly. */
+function findColds() {
+  state.colds = new Map();
+  state.coldSpan = new Map();          // cold id -> newest timestamp in it
+  for (const r of state.rows.samples) {
+    const id = (r.Cold || "").trim() || ("untracked:" + r.Label);
+    state.colds.set(r.Label, id);
+    const t = dnum(r.Date);
+    if (t === null) continue;
+    const prev = state.coldSpan.get(id);
+    if (prev === undefined || t > prev) state.coldSpan.set(id, t);
+  }
+}
+
+async function pickDirectory() {
+  err("");
+  if (!window.showDirectoryPicker) { $("#dirInput").click(); return; }
+  let dir;
+  try {
+    dir = await window.showDirectoryPicker({ id: "molbiolab", mode: "read" });
+  } catch (e) {
+    // AbortError = user cancelled. Anything else means the API isn't usable here
+    // (notably: file:// pages have an opaque origin, which Chrome refuses), so
+    // fall back to the classic folder-upload dialog, which always works.
+    if (e.name !== "AbortError") { noteFallback(); $("#dirInput").click(); }
+    return;
+  }
+  try {
+    await loadFromDirHandle(dir);
+  } catch (e) {
+    err(e.name === "NotFoundError"
+      ? "That folder has no samples.csv / pathogens.csv (and no data/ subfolder with them)."
+      : e.message);
+  }
+}
+
+async function reload() {
+  if (state.dirHandle) {
+    try {
+      ingest(await readAll(state.dirHandle), $("#src").textContent);
+      return;
+    } catch (e) { err(e.message); }
+  }
+  showLanding();
+}
+
+function showLanding() {
+  $("#landing").classList.remove("hidden");
+  $("#tableWrap").classList.add("hidden");
+  $("#statsWrap").classList.add("hidden");
+  $("#legend").classList.add("hidden");
+}
+
+/* ============================ render ============================ */
+function visibleCols() {
+  return VIEWS[state.view].cols.filter(c => !state.hidden[state.view].has(c.k));
+}
+function activeRows() {
+  const v = state.view, f = state.filters[v], q = state.q.toLowerCase().trim();
+  const cols = VIEWS[v].cols;
+  let rows = state.rows[v].filter(r => {
+    for (const k in f) { const set = f[k]; if (set && !set.has(r[k] || "")) return false; }
+    if (!q) return true;
+    return cols.some(c => (r[c.k] || "").toLowerCase().includes(q));
+  });
+  const { k, dir } = state.sort[v];
+  const col = cols.find(c => c.k === k);
+  if (coldSortOn()) {
+    // newest episode first, but oldest-to-newest *within* an episode so a cold
+    // reads in the order it was swabbed
+    rows = rows.slice().sort((a, b) => {
+      const ca = state.colds.get(a.Label), cb = state.colds.get(b.Label);
+      if (ca !== cb)
+        return (state.coldSpan.get(cb) ?? -Infinity) - (state.coldSpan.get(ca) ?? -Infinity)
+          || String(ca).localeCompare(String(cb));
+      return (dnum(a.Date) ?? Infinity) - (dnum(b.Date) ?? Infinity)
+        || cmpLabel(a.Label, b.Label);
+    });
+  } else if (col) {
+    const cmp = col.t.cmp || ((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+    rows = rows.slice().sort((a, b) => {
+      const r = cmp(a[k] || "", b[k] || "");
+      return (r || cmpLabel(a[VIEWS[v].key], b[VIEWS[v].key])) * dir;
+    });
+  }
+  const g = VIEWS[v].group;
+  if (g) {
+    const name = r => r[g] || "";                      // blank group sorts last
+    rows = rows.slice().sort((a, b) =>
+      (!name(a) - !name(b)) || name(a).localeCompare(name(b), undefined, { numeric: true }));
+  }
+  return rows;
+}
+
+// dir 0 on the samples Date column is the third click: group by cold episode
+const coldSortOn = () =>
+  state.view === "samples" && state.sort.samples.k === "Date" && state.sort.samples.dir === 0;
+
+function speciesOf(row) {
+  const raw = row.Species || "";
+  return raw ? raw.split(" + ").map(s => s.trim()).filter(Boolean) : [];
+}
+function isSequenced(row) {
+  if (state.view === "pathogens") return !!row.Sequenced;
+  return !!row.Seq;
+}
+
+const FUNNEL_SVG = '<svg viewBox="0 0 12 12"><path d="M1.5 3h9M3 6h6M4.75 9h2.5"/></svg>';
+
+function render() {
+  for (const t of ["samples", "pathogens", "reagents", "stats"])
+    $("#tab-" + t).setAttribute("aria-selected", state.view === t);
+  const isStats = state.view === "stats";
+  $("#tableWrap").classList.toggle("hidden", isStats);
+  $("#statsWrap").classList.toggle("hidden", !isStats);
+  $("#legend").classList.toggle("hidden", isStats);
+  for (const el of [$("#q"), $("#colsBtn")]) el.classList.toggle("hidden", isStats);
+  if (isStats) {
+    $("#count").textContent = "";
+    $("#clearBtn").classList.add("hidden");
+    renderStats();
+    savePrefs();
+    return;
+  }
+
+  const v = state.view, cols = visibleCols(), rows = activeRows();
+  const thead = $("#thead"), tbody = $("#tbody");
+  const cold = coldSortOn();
+
+  thead.replaceChildren(...cols.map(c => {
+    const th = document.createElement("th");
+    const s = state.sort[v];
+    const on = state.filters[v][c.k] ? "" : null;
+    const mark = s.k !== c.k ? "" : s.dir > 0 ? "▲" : s.dir < 0 ? "▼" : "▤";
+    const how = state.view === "samples" && c.k === "Date"
+      ? "group each cold together, then sort by Date" : "sort by " + c.k;
+    th.innerHTML = `<div class="h">
+      <span class="name" role="button" tabindex="0" title="${c.title ? esc(c.title) + " — " : ""}${esc(how)}">
+        <span class="txt">${esc(c.k)}</span><span class="arrow">${mark}</span></span>
+      <button class="funnel" title="Filter ${esc(c.k)}"${on !== null ? " data-on" : ""}>${FUNNEL_SVG}</button></div>`;
+    th.querySelector(".name").addEventListener("click", () => sortBy(c.k));
+    th.querySelector(".name").addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); sortBy(c.k); } });
+    th.querySelector(".funnel").addEventListener("click", e => { e.stopPropagation(); openFilter(c.k, e.currentTarget); });
+    return th;
+  }));
+
+  const gk = VIEWS[v].group;
+  const gname = r => gk ? (r[gk] || VIEWS[v].groupBlank || "—") : null;
+  const frag = document.createDocumentFragment();
+  let shown = 0, prevGroup = null;
+  rows.forEach((r, i) => {
+    if (gk) {
+      const g = gname(r);
+      if (g !== prevGroup) {
+        prevGroup = g;
+        const n = rows.filter(x => gname(x) === g).length;
+        const collapsed = state.collapsed[v].has(g);
+        const gr = document.createElement("tr");
+        gr.className = "grp";
+        const td = document.createElement("td");
+        td.colSpan = cols.length;
+        td.innerHTML = `<span class="tw">${collapsed ? "▸" : "▾"}</span>${esc(g)} <span class="n">${n}</span>`;
+        td.addEventListener("click", () => {
+          collapsed ? state.collapsed[v].delete(g) : state.collapsed[v].add(g);
+          render();
+        });
+        gr.append(td);
+        frag.append(gr);
+      }
+      if (state.collapsed[v].has(gname(r))) return;
+    }
+    shown++;
+
+    const tr = document.createElement("tr");
+    const sp = speciesOf(r);
+    const hueSp = sp.find(hasHue) || sp[0];
+    if (sp.length) { tr.dataset.sp = sp.join(" + "); tr.style.setProperty("--h", hueOf(hueSp)); }
+    if (isSequenced(r)) tr.dataset.seq = "";
+    if (v === "samples" && (r["Empty / Discarded"] || "").trim()) tr.classList.add("dim");
+    // in cold order, a row followed by another swab from the same cold gets a
+    // hairline instead of the full rule, and every swab of a multi-sample cold
+    // gets a segment of the tie bar
+    if (cold) {
+      const c = state.colds.get(r.Label);
+      const same = j => { const o = rows[j]; return o && c && state.colds.get(o.Label) === c; };
+      const up = same(i - 1), down = same(i + 1);
+      if (down) tr.dataset.samecold = "";
+      if (up || down) tr.dataset.cold = !up ? "first" : !down ? "last" : "mid";
+    }
+    const unexplained = v === "samples" && parseFloat(r.Prob) > 5 && !r.Species && !r["Confirmed+"];
+    for (const c of cols) {
+      const td = document.createElement("td");
+      if (c.t.cls) td.className = c.t.cls;
+      const val = r[c.k] || "";
+      if (c.k === "Cold") {
+        // A tick for the episode's primary (Cold === Label), otherwise the
+        // label of the primary this sample defers to.
+        td.innerHTML = !val ? ""
+          : val === r.Label ? '<span class="tick">✓</span>'
+          : `<span class="badge">${esc(val)}</span>`;
+      } else if (c.k === "Raw?") {
+        td.innerHTML = /^y/i.test(val) ? '<span class="tick">✓</span>' : (val ? `<span class="badge">${esc(val)}</span>` : "");
+      } else if (c.k === "Species" && val) {
+        td.innerHTML = sp.map(s => `<span class="badge">${esc(s)}</span>`).join(" ");
+      } else {
+        td.textContent = val;
+      }
+      if (c.k === "Prob" && unexplained) {
+        td.classList.add("unexplained");
+        td.title = "Looked like a real infection, but nothing was ever detected";
+      }
+      if (td.classList.contains("clip") && val) {
+        td.title = val;
+        td.addEventListener("click", () => td.classList.toggle("open"));
+      }
+      tr.append(td);
+    }
+    frag.append(tr);
+  });
+  tbody.replaceChildren(frag);
+  tbody.classList.toggle("cold", cold);
+
+  const total = state.rows[v].length;
+  $("#count").innerHTML = `<b>${shown}</b>${shown !== total ? ` / ${total}` : ""} rows`;
+  const anyFilter = Object.keys(state.filters[v]).length || state.q;
+  $("#clearBtn").classList.toggle("hidden", !anyFilter);
+  renderLegend(rows);
+  requestAnimationFrame(setStickyWidth);
+  savePrefs();
+}
+
+// how far a heading has to slide right to stay clear of the sticky first column
+function setStickyWidth() {
+  const first = $("#thead th");
+  document.documentElement.style.setProperty(
+    "--stick", first ? Math.round(first.getBoundingClientRect().width) + "px" : "0px");
+}
+addEventListener("resize", setStickyWidth);
+
+function renderLegend(rows) {
+  const counts = new Map(), seqCounts = new Map();
+  for (const r of state.rows[state.view]) {
+    const seq = isSequenced(r);
+    for (const s of speciesOf(r)) {
+      counts.set(s, (counts.get(s) || 0) + 1);
+      if (seq) seqCounts.set(s, (seqCounts.get(s) || 0) + 1);
+    }
+  }
+  const order = [...counts.entries()].sort((a, b) => hueOf(a[0]) - hueOf(b[0]) || a[0].localeCompare(b[0]));
+  const active = state.filters[state.view].Species;
+  const el = $("#legend");
+  el.replaceChildren();
+  el.classList.toggle("hidden", counts.size === 0);   // reagents have no species
+  if (!counts.size) return;
+  el.insertAdjacentHTML("beforeend", `<span class="lbl">Species</span>`);
+  for (const [s, n] of order) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.style.setProperty("--h", hueOf(s));
+    b.setAttribute("aria-pressed", active ? [...active].some(v => v.split(" + ").includes(s)) : false);
+    b.innerHTML = `<span class="sw"></span>${esc(s)} <span class="n">${n}${seqCounts.get(s) ? "·" + seqCounts.get(s) + "seq" : ""}</span>`;
+    b.title = `${n} ${state.view === "samples" ? "sample" : "record"}${n > 1 ? "s" : ""}` +
+      (seqCounts.get(s) ? `, ${seqCounts.get(s)} sequenced` : "") + " — click to filter";
+    b.addEventListener("click", () => toggleSpecies(s));
+    el.append(b);
+  }
+  el.insertAdjacentHTML("beforeend",
+    `<span class="sep"></span><span class="note"><span class="dk"></span> darker = sequenced</span>`);
+}
+
+/* ============================ stats ============================
+   Per-person coverage of the sampling programme. An illness episode is counted
+   by its primary sample — the row where `Cold === Label`, hand-picked to
+   represent the episode — so "confirmed" and "genotyped" are per cold, not per
+   swab. Both are read straight off the pathogens.csv join (`Species`, `Type`)
+   rather than from a flag in samples.csv, so they cannot go stale. */
+const STAT_MIN = 5;      // sources with fewer samples than this fold into "Other"
+
+function statSources() {
+  const n = new Map();
+  for (const r of state.rows.samples) n.set(r.Source || "—", (n.get(r.Source || "—") || 0) + 1);
+  return [...n.entries()].filter(([, c]) => c >= STAT_MIN)
+    .sort((a, b) => b[1] - a[1]).map(([s]) => s);
+}
+
+function renderStats() {
+  const main = statSources(), cols = ["Total", ...main, "Other"];
+  const bucket = r => cols.includes(r.Source) ? r.Source : "Other";
+  const count = f => {
+    const out = Object.fromEntries(cols.map(c => [c, 0]));
+    for (const r of state.rows.samples) if (f(r)) { out.Total++; out[bucket(r)]++; }
+    return out;
+  };
+  const year = r => { const t = dnum(r.Date); return t === null ? 0 : new Date(t).getUTCFullYear(); };
+
+  const primary = r => !!r.Cold && r.Cold === r.Label;
+  const samples = count(() => true);
+  const colds   = count(primary);
+  const pcr     = count(r => primary(r) && !!r.Species);
+  const gtype   = count(r => primary(r) && !!r.Type);
+  const colds23 = count(r => primary(r) && year(r) >= 2023);
+  const pcr23   = count(r => primary(r) && !!r.Species && year(r) >= 2023);
+
+  const ratio = (a, b) => Object.fromEntries(cols.map(c =>
+    [c, b[c] ? a[c] / b[c] : null]));
+
+  const rows = [
+    { label: "Total samples", vals: samples, tip: "Rows in samples.csv" },
+    { label: "Likely separate colds", vals: colds, sep: true,
+      tip: "Illness episodes — samples that are their own Cold (primary)" },
+    { label: "PCR Confirmed", vals: pcr, tip: "Colds with a pathogens.csv row" },
+    { label: "PCR Confirmed (%)", vals: ratio(pcr, colds), pct: true },
+    { label: "PCR Confirmed (% 2023+)", vals: ratio(pcr23, colds23), pct: true,
+      tip: "Same, restricted to colds from 2023 onwards" },
+    { label: "Genotyped", vals: gtype, sep: true,
+      tip: "Colds with a Type (genotype or lineage) in pathogens.csv" },
+    { label: "Genotyped (% of PCR)", vals: ratio(gtype, pcr), pct: true },
+    { label: "Genotyped (% of likely)", vals: ratio(gtype, colds), pct: true },
+  ];
+
+  const t = document.createElement("table");
+  t.className = "stat";
+  const head = document.createElement("tr");
+  head.innerHTML = "<th></th>" + cols.map(c => `<th>${esc(c)}</th>`).join("");
+  const thead = document.createElement("thead"); thead.append(head);
+  const tbody = document.createElement("tbody");
+  for (const r of rows) {
+    const tr = document.createElement("tr");
+    if (r.pct) tr.className = "pct";
+    if (r.sep) tr.classList.add("sep");
+    const th = document.createElement("th");
+    th.textContent = r.label;
+    if (r.tip) th.title = r.tip;
+    tr.append(th);
+    for (const c of cols) {
+      const td = document.createElement("td");
+      const v = r.vals[c];
+      if (v === null || v === undefined) { td.textContent = "—"; td.className = "blank"; }
+      else if (r.pct) {
+        td.textContent = Math.round(v * 100) + "%";
+        td.className = "heat";
+        // pale at 50% and below, saturated green at 100%
+        const k = Math.max(0, Math.min(1, (v - 0.5) * 2));
+        td.style.setProperty("--hl", (0.97 - 0.29 * k).toFixed(3));
+        td.style.setProperty("--hc", (0.012 + 0.078 * k).toFixed(3));
+      } else td.textContent = v;
+      tr.append(td);
+    }
+    tbody.append(tr);
+  }
+  t.append(thead, tbody);
+
+  const wrap = $("#statsWrap");
+  wrap.replaceChildren();
+  wrap.insertAdjacentHTML("beforeend",
+    `<h2>Sampling coverage</h2><p class="sub">One column per person who has given at least
+     ${STAT_MIN} samples. A <b>cold</b> is an illness episode, counted by its
+     primary sample (<code>Cold</code> = its own label); <b>confirmed</b> and <b>genotyped</b> are therefore
+     rates per cold rather than per swab. Percentages shade from pale at 50% to solid at 100%.</p>`);
+  wrap.append(t);
+}
+
+function toggleSpecies(s) {
+  const f = state.filters[state.view];
+  const all = new Set();
+  for (const r of state.rows[state.view]) if (speciesOf(r).includes(s)) all.add(r.Species || "");
+  const cur = f.Species;
+  const already = cur && [...cur].every(v => all.has(v)) && cur.size === all.size;
+  if (already) delete f.Species; else f.Species = all;
+  render();
+}
+
+function sortBy(k) {
+  const s = state.sort[state.view];
+  // the samples Date column leads with grouped-by-cold, then cycles ↓ → ↑
+  const tri = state.view === "samples" && k === "Date";
+  if (s.k !== k) { s.k = k; s.dir = tri ? 0 : 1; }
+  else if (tri) s.dir = s.dir === 0 ? -1 : s.dir === -1 ? 1 : 0;
+  else s.dir = -s.dir;
+  render();
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ============================ menus ============================ */
+function place(pop, anchor) {
+  pop.showPopover();
+  const r = anchor.getBoundingClientRect(), p = pop.getBoundingClientRect();
+  pop.style.left = Math.max(6, Math.min(r.left, innerWidth - p.width - 6)) + "px";
+  pop.style.top = Math.min(r.bottom + 4, innerHeight - p.height - 6) + "px";
+}
+
+function openFilter(k, anchor) {
+  const v = state.view, pop = $("#filterMenu");
+  const counts = new Map();
+  for (const r of state.rows[v]) { const val = r[k] || ""; counts.set(val, (counts.get(val) || 0) + 1); }
+  const col = VIEWS[v].cols.find(c => c.k === k);
+  const cmp = col?.t.cmp || ((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
+  const values = [...counts.keys()].sort((a, b) => (!a) - (!b) || cmp(a, b));
+  const sel = state.filters[v][k] || new Set(values);
+
+  pop.innerHTML = `<div class="menu-head">
+      <input type="search" placeholder="Filter ${esc(k)}…" autocomplete="off">
+      <button class="lnk" data-all>All</button><button class="lnk" data-none>None</button>
+    </div><div class="menu-body"></div>`;
+  const body = pop.querySelector(".menu-body");
+  const draw = (needle = "") => {
+    const shown = values.filter(x => !needle || x.toLowerCase().includes(needle));
+    body.replaceChildren();
+    if (!shown.length) { body.innerHTML = '<div class="empty">no matches</div>'; return; }
+    for (const val of shown) {
+      const l = document.createElement("label");
+      l.innerHTML = `<input type="checkbox"${sel.has(val) ? " checked" : ""}>
+        <span class="v">${val ? esc(val) : "<i>(blank)</i>"}</span><span class="c">${counts.get(val)}</span>`;
+      l.querySelector("input").addEventListener("change", e => {
+        e.target.checked ? sel.add(val) : sel.delete(val);
+        commit();
+      });
+      body.append(l);
+    }
+  };
+  const commit = () => {
+    if (sel.size === values.length) delete state.filters[v][k];
+    else state.filters[v][k] = new Set(sel);
+    render();
+  };
+  pop.querySelector("input[type=search]").addEventListener("input", e => draw(e.target.value.toLowerCase().trim()));
+  pop.querySelector("[data-all]").addEventListener("click", () => { values.forEach(x => sel.add(x)); draw(pop.querySelector("input[type=search]").value.toLowerCase().trim()); commit(); });
+  pop.querySelector("[data-none]").addEventListener("click", () => { sel.clear(); draw(pop.querySelector("input[type=search]").value.toLowerCase().trim()); commit(); });
+  draw();
+  place(pop, anchor);
+  pop.querySelector("input[type=search]").focus();
+}
+
+function buildColsMenu() {
+  const v = state.view, pop = $("#colsMenu");
+  pop.innerHTML = `<div class="menu-head"><b>Columns</b>
+      <button class="lnk" data-all>All</button><button class="lnk" data-reset>Reset</button>
+    </div><div class="menu-body"></div>`;
+  const body = pop.querySelector(".menu-body");
+  for (const c of VIEWS[v].cols) {
+    const l = document.createElement("label");
+    l.innerHTML = `<input type="checkbox"${state.hidden[v].has(c.k) ? "" : " checked"}>
+      <span class="v">${esc(c.k)}</span>`;
+    l.querySelector("input").addEventListener("change", e => {
+      e.target.checked ? state.hidden[v].delete(c.k) : state.hidden[v].add(c.k);
+      render();
+    });
+    body.append(l);
+  }
+  pop.querySelector("[data-all]").addEventListener("click", () => { state.hidden[v].clear(); buildColsMenu(); render(); $("#colsMenu").showPopover(); });
+  pop.querySelector("[data-reset]").addEventListener("click", () => {
+    state.hidden[v] = new Set(VIEWS[v].cols.filter(c => c.off).map(c => c.k));
+    buildColsMenu(); render(); $("#colsMenu").showPopover();
+  });
+}
+
+/* ============================ wiring ============================ */
+$("#colsBtn").addEventListener("click", () => {
+  buildColsMenu();
+  requestAnimationFrame(() => place($("#colsMenu"), $("#colsBtn")));
+});
+$("#colsMenu").addEventListener("beforetoggle", e => {
+  $("#colsBtn").setAttribute("aria-expanded", e.newState === "open");
+});
+for (const t of ["samples", "pathogens", "reagents", "stats"])
+  $("#tab-" + t).addEventListener("click", () => { state.view = t; render(); });
+$("#q").addEventListener("input", e => { state.q = e.target.value; render(); });
+$("#clearBtn").addEventListener("click", () => {
+  state.filters[state.view] = {}; state.q = ""; $("#q").value = ""; render();
+});
+$("#reloadBtn").addEventListener("click", reload);
+$("#folderBtn").addEventListener("click", () => { showLanding(); pickDirectory(); });
+$("#pickDir").addEventListener("click", pickDirectory);
+$("#pickFiles").addEventListener("click", () => $("#fileInput").click());
+$("#dirInput").addEventListener("change", e => loadFromFileList(e.target.files));
+$("#fileInput").addEventListener("change", e => loadFromFileList(e.target.files));
+
+document.addEventListener("keydown", e => {
+  if (e.key === "/" && e.target === document.body) { e.preventDefault(); $("#q").focus(); }
+  if (e.key === "Escape" && e.target === $("#q")) { $("#q").value = ""; state.q = ""; render(); }
+});
+
+/* drag & drop: a folder, or the two CSVs */
+const stop = e => { e.preventDefault(); e.stopPropagation(); };
+addEventListener("dragover", e => { stop(e); $("#card")?.classList.add("drop"); });
+addEventListener("dragleave", e => { stop(e); $("#card")?.classList.remove("drop"); });
+addEventListener("drop", async e => {
+  stop(e); $("#card")?.classList.remove("drop"); err("");
+  const items = [...e.dataTransfer.items];
+  for (const it of items) {
+    if (it.kind !== "file") continue;
+    if (it.getAsFileSystemHandle) {
+      try {
+        const h = await it.getAsFileSystemHandle();
+        if (h?.kind === "directory") { await loadFromDirHandle(h); return; }
+      } catch {}
+    }
+  }
+  const files = [...e.dataTransfer.files];
+  if (files.length) await loadFromFileList(files);
+  else err("Drop the data folder, or samples.csv + pathogens.csv together.");
+});
+
+function noteFallback() {
+  document.querySelector(".card .hint").innerHTML =
+    "<b>Choose folder…</b> is using the classic folder dialog here (the File System Access API " +
+    "isn’t available on <code>file://</code> pages), so ↻ can’t re-read from disk without re-picking. " +
+    "Serving the folder over http — <code>python3 -m http.server</code> — gets you one-click reload.";
+}
+
+loadPrefs();
+$("#q").value = state.q || "";
+showLanding();
+if (!window.showDirectoryPicker) noteFallback();
+restoreDir();
+</script>
+</body>
+</html>
