@@ -29,7 +29,140 @@ const lab = {
   events: new Map(),      // cdna.csv: tube -> its ledger rows, in file order
   hasCdna: new Set(),     // sample labels with at least one cDNA tube
   samples: new Set(),     // every samples.csv Label, for deciding what to link
+  // The name → row indexes the links resolve against. Keyed lower-cased,
+  // because spellings drift in case across the files.
+  primer: new Map(),      // primers.csv Label
+  reagent: new Map(),     // reagents.csv Label
+  assay: new Map(),       // assays.csv Name
+  speciesSet: new Set(),  // species.csv Species
+  hasPathogen: new Set(), // pathogens.csv Sample
+  // What the *other* tool's files actually contain. A link across to it is
+  // only worth drawing if there is something on the other side, and these are
+  // what say so — see hasWell / hasRun below.
+  wells: new Map(),       // qPCR-results.csv: sample -> Set of primer names
+  assayed: new Set(),     // every primer name qPCR-results.csv names
+  runs: new Set(),        // sequencing.csv Run
+  sequenced: new Set(),   // sequencing.csv Sample, pools split
 };
+
+/* An assay name matches a well the way results.js matches it: as written, or
+   as the design a preparation was made from (`HRV ma` reaching `HRV ma grn`).
+   Case-insensitively, because the notes write `HRV Ma` and the results write
+   `HRV ma` — the drift primers.md warns about. */
+const namesAssay = (set, want) => {
+  const w = String(want || "").trim().toLowerCase();
+  if (!w || !set) return false;
+  if (set.has(w)) return true;
+  for (const p of set) if (p.startsWith(w + " ")) return true;
+  return false;
+};
+const hasWell = (sample, assay) => namesAssay(lab.wells.get(sample), assay);
+
+/* ====================== resolving a name to a row ======================
+   Half the columns in these files name something defined in another one — a
+   `Confirmed+` entry names an assay, an `assays.csv` component names the tube
+   it's mixed from, a reagent's description names the design it's a preparation
+   of. None of those are foreign keys with a constraint behind them; they're
+   what someone wrote at the bench. So a link is only ever drawn where the name
+   resolves to a row that is actually there, and nothing about any particular
+   value is written into this file: change the data and the links follow.
+
+   Matching goes: the name as written, then a unique prefix of it (`C.pneum` →
+   `C.pneum ys`), then the same two against the name with trailing words dropped
+   (`HRV ma Cy5 probe` → `HRV ma`). A prefix that fits two rows resolves to
+   neither — a guess between designs is worse than no link. */
+function lookup(name, table) {
+  const k = String(name || "").trim().toLowerCase();
+  if (!k) return null;
+  if (table.has(k)) return table.get(k);
+  let hit = null;
+  for (const [key, label] of table) {
+    if (!key.startsWith(k + " ")) continue;
+    if (hit) return null;                   // ambiguous
+    hit = label;
+  }
+  return hit;
+}
+
+// Which tab a resolved name lives on, and what to filter it to there.
+const TABLES = {
+  primers:  () => [lab.primer, "Label"],
+  reagents: () => [lab.reagent, "Label"],
+  assays:   () => [lab.assay, "Name"],
+};
+
+/* Resolve `name` against the given tabs, in order of preference, and return the
+   address of the row it landed on. `order` is the caller's judgement about what
+   kind of name it is: a `Confirmed+` entry names the tube that was pipetted, so
+   it looks in reagents first; a description names a design, so it looks in
+   primers first. */
+function target(name, order) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  for (const tab of order) {
+    const [map, col] = TABLES[tab]();
+    for (let i = words.length; i > 0; i--) {
+      const hit = lookup(words.slice(0, i).join(" "), map);
+      if (hit) return { tab, spec: { [col]: [hit] } };
+    }
+  }
+  return null;
+}
+
+// The same, already turned into a link — or the plain text where it resolved
+// to nothing, so an unlinked name reads as exactly that.
+function nameLink(text, order, title, name = text) {
+  const t = target(name, order);
+  return t ? link(text, "", { tab: t.tab, spec: t.spec },
+    `${Object.values(t.spec)[0][0]} — ${title}`) : document.createTextNode(text);
+}
+
+// comma- or semicolon-separated list of names, as several columns here write one
+const splitList = v => String(v || "").split(/[,;]/).map(s => s.trim()).filter(Boolean);
+
+// the reagents whose Description is a list of oligos rather than free text
+const isOligo = row => /primer|probe/i.test(row.Category || "");
+
+/* A `Primer/probe assay` description has a shape: the tube's components,
+   separated by commas, each a name followed by `@` and its concentration —
+   `Rhinovirus @20µM, FAM probe @20µM (40x)`. The name is the linkable half, and
+   it comes in two kinds. On a panel it is usually another row's label (`SC2-N2
+   CDC grn`, `ENT rc primer`) and resolves directly. On a single assay it is
+   more often prose for the *target* (`Rhinovirus`, `Metapneumovirus`), which
+   names no row at all — but the tube's own label does, with its preparation
+   suffix trimmed, and that design is exactly what the prose is describing. So
+   the first component falls back to it, saying so on hover.
+
+   Everything that resolves to neither is left as plain text. Much of it should
+   be: `FAM probe` is a dye, not a design. This column is documented prose, not
+   a join key, so a name that doesn't resolve here isn't a fault to report —
+   unlike assays.csv's components, which are, and which ingest does report. */
+function describeNodes(row) {
+  const out = [];
+  let first = true;
+  for (const piece of String(row.Description || "").split(/([,;])/)) {
+    if (piece === "," || piece === ";") { out.push(piece); continue; }
+    const at = piece.indexOf("@");
+    const head = at < 0 ? piece : piece.slice(0, at);
+    const tail = at < 0 ? "" : piece.slice(at);
+    const [, lead, core, trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(head);
+    if (lead) out.push(lead);
+    if (!core) { if (trail) out.push(trail); if (tail) out.push(tail); continue; }
+    // parentheses are an aside about the component, not part of its name
+    const name = core.replace(/\(.*?\)/g, " ").replace(/\s+/g, " ").trim();
+    if (target(name, ["primers", "reagents"])) {
+      out.push(nameLink(core, ["primers", "reagents"], "what this component is", name));
+    } else if (first && target(row.Label, ["primers"])) {
+      out.push(nameLink(core, ["primers"],
+        `the design ${row.Label} is a preparation of, matched on its label`, row.Label));
+    } else {
+      out.push(core);
+    }
+    first = false;
+    if (trail) out.push(trail);
+    if (tail) out.push(tail);
+  }
+  return out;
+}
 
 /* Commensals are deliberately left uncoloured. A row's tint is there to say
    "something was found here", and finding a commensal isn't a finding — it's
@@ -76,6 +209,36 @@ function assayNames(confirmed) {
     if (bare) out.push(bare);
   }
   return out;
+}
+
+/* The same split as assayNames, but keeping the text as it was written, because
+   this one is rendered rather than counted: each entry comes back as the assay
+   it names and the measurements in brackets behind it. The two halves are
+   different kinds of thing and point at different places — the name at the tube
+   or design it names, the numbers at the wells they were read off. */
+function confirmedEntries(confirmed) {
+  const out = [];
+  let depth = 0, cur = "";
+  for (const ch of confirmed || "") {
+    if (ch === "(") depth++;
+    else if (ch === ")") depth = Math.max(0, depth - 1);
+    if (ch === "," && depth === 0) { out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.filter(s => s.trim()).map(entry => {
+    const i = entry.indexOf("(");
+    // The spacing is kept, but outside the link — an underline that runs on
+    // past the name into the gap before the bracket reads as a mistake.
+    const [, lead, name, gap] = /^(\s*)([\s\S]*?)(\s*)$/.exec(i < 0 ? entry : entry.slice(0, i));
+    return {
+      lead, name, gap,
+      cq: i < 0 ? "" : entry.slice(i),
+      // `~` marks a marginal call and a trailing `?` one the experimenter
+      // didn't trust; neither changes which assay is being named.
+      bare: name.replace(/^\s*~+/, "").replace(/\?\s*$/, "").trim(),
+    };
+  });
 }
 
 // Species detected by this row's confirmed assays. Unresolvable names are
@@ -179,7 +342,17 @@ const coloured = {
   match: { Species: (cell, want) => splitSpecies(cell).includes(want) },
   cell(td, c, row, val) {
     if (c.k === "Species" && val) {
-      td.innerHTML = speciesOf(row).map(s => `<span class="badge">${esc(s)}</span>`).join(" ");
+      // Each organism is its own badge, and its own way through to what
+      // species.csv says about it — where species.csv has a row for it.
+      for (const s of speciesOf(row)) {
+        if (td.childNodes.length) td.append(" ");
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.append(lab.speciesSet.has(s)
+          ? link(s, "", { tab: "species", spec: { Species: [s] } }, `What ${s} is`)
+          : s);
+        td.append(badge);
+      }
       return true;
     }
     return false;
@@ -255,22 +428,48 @@ const views = {
           `cDNA tubes made from ${val}`));
         return true;
       }
+      /* `Confirmed+` is two kinds of thing per entry — `ENT rc (28.1, 27.8,
+         89°)` — so it gets two links rather than one. The assay name goes to
+         the tube or design it names; the measurements go to the wells they
+         were read off, which is this sample filtered to that assay. */
       if (c.k === "Confirmed+" && val) {
-        td.append(link(val, RESULTS, { tab: "results", spec: { Sample: [row.Label] } },
-          `The qPCR wells this call was made from — every well ever run on ${row.Label}`));
+        for (const e of confirmedEntries(val)) {
+          if (td.childNodes.length) td.append(", ");
+          if (e.lead) td.append(e.lead);
+          td.append(nameLink(e.name, ["reagents", "primers"],
+            "the assay this call was made with", e.bare));
+          if (e.gap) td.append(e.gap);
+          // Only where those wells are in qPCR-results.csv. Where they aren't,
+          // the numbers stay plain text and ingest counts it.
+          if (e.cq) {
+            td.append(hasWell(row.Label, e.bare)
+              ? link(e.cq, RESULTS,
+                  { tab: "results", spec: { Sample: [row.Label], Primer: [e.bare] } },
+                  `The ${e.bare} wells on ${row.Label} these were read off`)
+              : e.cq);
+          }
+        }
         return true;
       }
-      if (c.k === "Seq" && val) {
+      if (c.k === "Seq" && val && lab.sequenced.has(row.Label)) {
         td.append(link(val, RESULTS, { tab: "sequencing", spec: { Sample: [row.Label] } },
           `The sequencing libraries made from ${row.Label}`));
         return true;
       }
       if (c.k === "Cold") {
         // A tick for the episode's primary (Cold === Label), otherwise the
-        // label of the primary this sample defers to.
-        td.innerHTML = !val ? ""
-          : val === row.Label ? '<span class="tick">✓</span>'
-          : `<span class="badge">${esc(val)}</span>`;
+        // label of the primary this sample defers to. Either way it points at
+        // what was found in that episode — the primary is the sample a
+        // pathogens.csv row is filed under — where there is such a row.
+        if (!val) return true;
+        const box = document.createElement("span");
+        box.className = val === row.Label ? "tick" : "badge";
+        const text = val === row.Label ? "✓" : val;
+        box.append(lab.hasPathogen.has(val)
+          ? link(text, "", { tab: "pathogens", spec: { Sample: [val] } },
+              `What was found in ${val}'s illness episode`)
+          : text);
+        td.append(box);
         return true;
       }
       if (c.k === "Prob" && parseFloat(val) > 5 && !row.Species && !row["Confirmed+"]) {
@@ -320,7 +519,7 @@ const views = {
       // the half that identifies a row over there.
       if (c.k === "Sequenced" && val) {
         const runs = [...new Set(val.split(/[\s,;·]+/).filter(Boolean)
-          .map(t => t.split("-")[0]))];
+          .map(t => t.split("-")[0]))].filter(r => lab.runs.has(r));
         if (runs.length) {
           td.append(link(val, RESULTS, { tab: "sequencing", spec: { Run: runs } },
             `The sequencing ${runs.length > 1 ? "runs" : "run"} behind this: ${runs.join(", ")}`));
@@ -391,8 +590,8 @@ const views = {
     ],
     cell(td, c, row, val) {
       // A design's roll-up over there: how often it has come up positive, its
-      // usual Cq, its contamination history.
-      if (c.k === "Label" && val) {
+      // usual Cq, its contamination history — where it has ever been run.
+      if (c.k === "Label" && val && namesAssay(lab.assayed, val)) {
         td.append(link(val, RESULTS, { tab: "assays", spec: { Primer: [val] } },
           `Every qPCR assay prepared from the ${val} design`));
         return true;
@@ -422,9 +621,49 @@ const views = {
     cell(td, c, row, val) {
       // qPCR names its assay as it was *prepared*, which is a reagent label —
       // so a primer tube here goes straight to the wells it was used in.
-      if (c.k === "Label" && val && /primer|probe|assay/i.test(row.Category || "")) {
+      if (c.k === "Label" && val && isOligo(row) && namesAssay(lab.assayed, val)) {
         td.append(link(val, RESULTS, { tab: "results", spec: { Primer: [val] } },
           `qPCR wells run with ${val}`));
+        return true;
+      }
+      if (c.k === "Description" && val && isOligo(row)) {
+        td.append(...describeNodes(row));
+        return true;
+      }
+      return coloured.cell(td, c, row, val);
+    },
+  },
+
+  /* ---- assays ----
+     `assays.csv` is the panel sheet: what goes in a multiplexed well, and what
+     a name like `RVPv3` or `YRPe` stands for. Every component is a tube out of
+     reagents.csv (or, failing that, a design out of primers.csv), which is what
+     makes this tab worth having as a tab — it's the index from the shorthand
+     the notes use to the things on the bench. */
+  assays: {
+    label: "Assays",
+    key: "Name",
+    ...coloured,
+    sort: { k: "Name", dir: 1 },       // a reference table, not events
+    cols: [
+      { k: "Name",    t: T.label, title: "The panel as the notes name it" },
+      { k: "Species", t: T.flag, title: "What its components target, via primers.csv" },
+      { k: "Wells",   t: T.num, title: "Wells the panel occupies. Blank where it isn't a plate layout — a sequencing panel, or a note about one assay" },
+      { k: "Parts",   t: T.num, title: "Components listed" },
+      { k: "Components", t: T.clip, title: "The tubes it's mixed from, each a reagents.csv or primers.csv row" },
+      { k: "Notes",   t: T.clip },
+    ],
+    cell(td, c, row, val) {
+      // The panel's own tube, where it is mixed and stored as one.
+      if (c.k === "Name" && val) {
+        td.append(nameLink(val, ["reagents"], "the tube this panel is stored in"));
+        return true;
+      }
+      if (c.k === "Components" && val) {
+        for (const name of splitList(val)) {
+          if (td.childNodes.length) td.append(", ");
+          td.append(nameLink(name, ["reagents", "primers"], "one of this panel's components"));
+        }
         return true;
       }
       return coloured.cell(td, c, row, val);
@@ -500,6 +739,30 @@ const views = {
     },
   },
 };
+
+/* ====================== assays.csv → the panels tab ======================
+   A panel's components are the one place in this file that really is a join
+   key — each names a tube or a design — so unlike a reagent's prose
+   description, one that resolves to nothing is worth saying out loud. The
+   species come the same way, which is what colours the row: a panel is about
+   whatever its components are looking for. */
+function enrichAssays(assays, unresolved) {
+  for (const r of assays) {
+    const names = splitList(r.Components);
+    const species = [];
+    for (const n of names) {
+      const t = target(n, ["reagents", "primers"]);
+      if (!t) { unresolved.set(n, (unresolved.get(n) || 0) + 1); continue; }
+      // Only a design says what it targets; a reagent gets there through its
+      // own label, the same trimming every other lookup here uses.
+      const design = target(n, ["primers"]);
+      const sp = design && lab.assaySpecies.get(design.spec.Label[0].toLowerCase());
+      if (sp && !species.includes(sp)) species.push(sp);
+    }
+    r.Species = species.join(" + ");
+    r.Parts = names.length ? String(names.length) : "";
+  }
+}
 
 /* ====================== the cDNA ledger → tubes ======================
    One row out per tube, summed from the rows in. See data/cdna.md: a tube's
@@ -632,10 +895,46 @@ function ingest(tables) {
     pathogens: pathogens.rows,
     species: tables["species.csv"]?.rows || [],
     primers: tables["primers.csv"]?.rows || [],
+    assays: tables["assays.csv"]?.rows || [],
     reagents: tables["reagents.csv"]?.rows || [],
     cdna: [],                     // rolled up below, once samples are enriched
   };
   lab.samples = new Set(rows.samples.map(r => r.Label));
+
+  // The indexes every link resolves against, rebuilt from the files themselves
+  // so nothing here has to know what any particular row is called.
+  const index = (list, col) => new Map(list
+    .map(r => [(r[col] || "").trim(), r])
+    .filter(([k]) => k)
+    .map(([k]) => [k.toLowerCase(), k]));
+  lab.primer = index(rows.primers, "Label");
+  lab.reagent = index(rows.reagents, "Label");
+  lab.assay = index(rows.assays, "Name");
+  lab.speciesSet = new Set(rows.species.map(r => (r.Species || "").trim()).filter(Boolean));
+  lab.hasPathogen = new Set(rows.pathogens.map(r => r.Sample).filter(Boolean));
+
+  /* What the results tool's files hold, so a link over to it is only drawn
+     where it lands on something. A `Confirmed+` call whose wells aren't in
+     qPCR-results.csv is a gap in the data, not a link to draw and then
+     apologise for — and counting them is how the gap gets noticed. */
+  const pool = v => String(v || "").split("+").map(s => s.trim()).filter(Boolean);
+  lab.wells = new Map();
+  lab.assayed = new Set();
+  for (const r of tables["qPCR-results.csv"]?.rows || []) {
+    const names = String(r.Primer || "").split(" + ").map(s => s.trim().toLowerCase())
+      .filter(Boolean);
+    for (const n of names) lab.assayed.add(n);
+    for (const s of pool(r.Sample)) {
+      if (!lab.wells.has(s)) lab.wells.set(s, new Set());
+      for (const n of names) lab.wells.get(s).add(n);
+    }
+  }
+  lab.runs = new Set();
+  lab.sequenced = new Set();
+  for (const r of tables["sequencing.csv"]?.rows || []) {
+    if (r.Run) lab.runs.add(r.Run);
+    for (const s of pool(r.Sample)) lab.sequenced.add(s);
+  }
 
   lab.commensal = new Set(rows.species
     .filter(r => (r.Pathogenicity || "").trim() === "Commensal")
@@ -687,18 +986,54 @@ function ingest(tables) {
   rows.cdna = cdnaRows(lab.events, rows.samples);
   lab.hasCdna = new Set(rows.cdna.flatMap(r => r.Sample.split("+").map(s => s.trim())));
 
-  // Say so rather than quietly leaving those rows uncoloured.
-  let notice = "";
-  if (!tables["primers.csv"]) {
-    notice = "No primers.csv in that folder — rows are coloured from pathogens.csv only.";
-  } else if (unknownAssays.size) {
-    const list = [...unknownAssays.entries()]
-      .sort((a, b) => b[1] - a[1]).map(([n, c]) => `${n} (${c})`).join(", ");
-    notice = `Confirmed+ names ${unknownAssays.size} assay${unknownAssays.size > 1 ? "s" : ""} `
-      + `not in primers.csv: ${list}`;
+  const unresolvedParts = new Map();
+  enrichAssays(rows.assays, unresolvedParts);
+
+  // Calls recorded against wells that qPCR-results.csv doesn't have. The
+  // numbers in Confirmed+ were read off something, so this is a gap in the
+  // results file rather than a naming problem — worth saying, since it's
+  // invisible until you go looking for the wells behind a call.
+  const noWells = new Map();
+  if (tables["qPCR-results.csv"]) for (const r of rows.samples) {
+    for (const e of confirmedEntries(r["Confirmed+"])) {
+      if (!e.cq || hasWell(r.Label, e.bare)) continue;
+      const k = `${r.Label} ${e.bare}`;
+      noWells.set(k, (noWells.get(k) || 0) + 1);
+    }
   }
-  return { rows, notice };
+
+  /* Say so rather than quietly leaving a row uncoloured or a name unlinked.
+     Only the columns that really are join keys are reported: a name in
+     `Confirmed+` or in an assay's `Components` is meant to identify a row
+     somewhere, so one that doesn't is a fault worth seeing. A reagent's
+     `Description` is documented prose, and most of it names no row by design,
+     so it links what it can and stays quiet about the rest. */
+  const notices = [];
+  if (!tables["primers.csv"]) {
+    notices.push("No primers.csv in that folder — rows are coloured from pathogens.csv only.");
+  } else if (unknownAssays.size) {
+    notices.push(`Confirmed+ names ${count(unknownAssays, "assay")} `
+      + `not in primers.csv: ${listOf(unknownAssays)}`);
+  }
+  if (rows.assays.length && unresolvedParts.size) {
+    notices.push(`assays.csv names ${count(unresolvedParts, "component")} that is neither `
+      + `a reagents.csv tube nor a primers.csv design, so it isn't linked: `
+      + `${listOf(unresolvedParts)}`);
+  }
+  if (noWells.size) {
+    notices.push(`${count(noWells, "Confirmed+ call")} cite${noWells.size > 1 ? "" : "s"} `
+      + `a Cq with no matching well in qPCR-results.csv: ${listOf(noWells)}`);
+  }
+  return { rows, notice: notices.join("  ·  ") };
 }
+
+// "3 assays" / "1 component", and the offenders behind it, commonest first
+const count = (m, noun) => `${m.size} ${noun}${m.size > 1 ? "s" : ""}`;
+const listOf = (m, cap = 8) => {
+  const all = [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return all.slice(0, cap).map(([n, c]) => c > 1 ? `${n} (${c})` : n).join(", ")
+    + (all.length > cap ? `, +${all.length - cap} more` : "");
+};
 
 const app = new Dataview.App({
   title: "Inventory",
@@ -706,7 +1041,8 @@ const app = new Dataview.App({
   required: ["samples.csv", "pathogens.csv"],
   landing: "Pick the folder holding <code>samples.csv</code> and <code>pathogens.csv</code> "
     + "(plus <code>primers.csv</code> for result colouring, and <code>species.csv</code> / "
-    + "<code>reagents.csv</code> / <code>cdna.csv</code> for those tabs) — the repo root or its "
+    + "<code>assays.csv</code> / <code>reagents.csv</code> / <code>cdna.csv</code> for those tabs) "
+    + "— the repo root or its "
     + "<code>data/</code> folder both work. Nothing leaves this machine; the page only reads the files.",
   views,
   tabs: [{ id: "stats", label: "Stats", render: renderStats }],

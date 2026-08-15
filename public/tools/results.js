@@ -149,11 +149,17 @@ const coloured = {
   match: {
     Species: (cell, want) => parts(cell).includes(want),
     Sample: (cell, want) => pool(cell).includes(want),
-    // `Primer` is the assay as *prepared*, so a link from a primers.csv design
-    // (`HRV ma`) has to reach every preparation of it (`HRV ma grn`, `HRV ma
-    // Cy5`) — which is the same prefix rule design() resolves by.
-    Primer: (cell, want) => parts(cell).some(p =>
-      p === want || p.toLowerCase().startsWith(want.toLowerCase() + " ")),
+    /* `Primer` is the assay as *prepared*, so a link from a primers.csv design
+       (`HRV ma`) has to reach every preparation of it (`HRV ma grn`, `HRV ma
+       Cy5`) — the same prefix rule design() resolves by. Case-insensitively,
+       both here and on the exact match: the notes write `HRV Ma` and the
+       results write `HRV ma`, which is exactly the drift primers.md warns
+       about, and a link that respected it would land on an empty table. */
+    Primer: (cell, want) => {
+      const w = want.toLowerCase();
+      return parts(cell).some(p =>
+        p.toLowerCase() === w || p.toLowerCase().startsWith(w + " "));
+    },
   },
 };
 

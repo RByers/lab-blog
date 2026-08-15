@@ -35,8 +35,9 @@ once: the chosen folder is remembered, and shared between them.
 The split between them is what the lab *has* versus what its assays *said*.
 
 - **[Inventory](https://lab.rbyers.ca/tools/inventory.html)**
-  (`inventory.html`) — samples, pathogens, species, cDNA tubes, primer designs
-  and reagents, one tab each, plus per-person sampling-coverage stats. Sample
+  (`inventory.html`) — samples, pathogens, species, primer designs, assay
+  panels, reagents and cDNA tubes, one tab each, plus per-person
+  sampling-coverage stats. Sample
   rows are tinted by the species found in them, darker once sequenced, and
   swabs from one illness episode are banded together. The cDNA tab rolls
   `cdna.csv`'s event ledger up into one line per tube — what's left of it being
@@ -62,9 +63,19 @@ results.html#tab=results&Sample=S90
 ```
 
 `tab` and `q` are reserved and every other parameter is a column name, repeated
-for several values. That is what the cross-links are built out of, so clicking
-`Confirmed+` on a sample opens the qPCR wells that call was made from, and the
+for several values. That is what the cross-links are built out of, and the
 address bar always holds a link you can send to someone.
+
+Most columns that name something defined elsewhere are one of those links. A
+`Confirmed+` entry is two: the assay name goes to the tube or design it names,
+and the Cq behind it to the wells it was read off. Nothing about any particular
+value is written into the tools — a name is resolved against the file that
+defines it (as written, then as a unique prefix, then with trailing words
+dropped, so `HRV ma Cy5 probe` finds `HRV ma`), and **a link is only drawn when
+it lands on a row that is really there**. What doesn't resolve stays as plain
+text, and where the column is a genuine join key — an assay panel's components,
+a `Confirmed+` Cq — the tool says in the notice bar what it couldn't link, which
+is how a gap in the data gets noticed rather than quietly papered over.
 
 The shared machinery — reading and watching the folder, sorting, filtering,
 hiding columns, the legend, the address bar, the page chrome — is `dataview.js`
