@@ -4,7 +4,8 @@
  * get a set of tabs, each a sortable / filterable / column-hideable table over
  * one of the CSVs. This file is all of that — reading the folder (and watching
  * it), remembering what you had open, drawing the table, the filter and column
- * menus, the legend, the landing card. A tool (inventory.js, qpcr.js) supplies
+ * menus, the legend, the address bar, the landing card. A tool (inventory.js,
+ * results.js) supplies
  * only what is specific to it: which columns exist, how rows are coloured, and
  * whatever derived tabs it wants.
  *
@@ -201,6 +202,7 @@ function stripes(species) {
 const DATA_FILES = [
   "samples.csv", "pathogens.csv", "species.csv",
   "primers.csv", "reagents.csv", "assays.csv", "qPCR-results.csv",
+  "cdna.csv", "sequencing.csv",
 ];
 
 /* A FileSystemDirectoryHandle is structured-cloneable, so IndexedDB can hold
@@ -332,6 +334,66 @@ async function ghBlob(sha) {
 
 function ghLabel(sha) { return `${GH_REPO.split("/")[1]}@${sha.slice(0, 7)}`; }
 
+/* ===================== the address bar =====================
+   A tool's URL hash says which tab you're looking at and what it's filtered to,
+   so a view can be linked to — from another tab, from the other tool, or from
+   outside either of them:
+
+     inventory.html#tab=samples&Species=HRV-A
+     results.html#tab=results&Sample=S90
+     inventory.html#tab=cdna&Tube=S183+cD
+
+   `tab` and `q` (the search box) are reserved; every other parameter is a
+   column name, repeated for several allowed values.
+
+   It is deliberately an *address* rather than a mirror of every knob. The
+   remembered preferences already carry the full UI state — sort, hidden
+   columns, collapsed groups — and a filter set written out in full would put a
+   hundred species names in the URL the moment you pressed a legend chip. So
+   what the hash carries is the filter *intent*: the handful of values a link
+   asked for, expanded against the loaded rows through the view's `match` (which
+   is why `Sample=S90` also finds the pooled `S46+S53+S90` wells), and dropped
+   again as soon as that column is filtered by hand, because it no longer
+   describes what's on screen. */
+const HASH_RESERVED = new Set(["tab", "q"]);
+
+// "#" and "" are both "no address given", not "an address asking for nothing".
+const hasAddr = () => location.hash.replace(/^#/, "").length > 0;
+
+function parseHash(h = location.hash) {
+  const p = new URLSearchParams(h.replace(/^#/, ""));
+  const spec = {};
+  for (const [k, v] of p) {
+    if (HASH_RESERVED.has(k)) continue;
+    (spec[k] ||= []).push(v);
+  }
+  return { tab: p.get("tab") || "", q: p.get("q") || "", spec };
+}
+
+function buildHash({ tab = "", q = "", spec = {} } = {}) {
+  const p = new URLSearchParams();
+  if (tab) p.set("tab", tab);
+  for (const [k, vals] of Object.entries(spec)) for (const v of vals) p.append(k, v);
+  if (q) p.set("q", q);
+  const s = p.toString();
+  return s ? "#" + s : "";
+}
+
+// An address as an href. `page` is "" for another tab of this same tool.
+const hrefFor = (page, addr) => (page || "") + buildHash(addr);
+
+/* A cell that is also a way in to somewhere else. The click is stopped from
+   bubbling because the clip-to-expand handler sits on the cell itself, and one
+   click should do one thing. */
+function link(text, page, addr, title) {
+  const a = document.createElement("a");
+  a.href = hrefFor(page, addr);
+  a.textContent = text;
+  if (title) a.title = title;
+  a.addEventListener("click", e => e.stopPropagation());
+  return a;
+}
+
 /* ============================ page chrome ============================
    Built here rather than written out in each tool's HTML: it is the same
    header, legend, table and landing card every time, and two copies of it in
@@ -429,6 +491,10 @@ class App {
     this.ghShas = new Map();
     this.ghTexts = {};
     this.ghTimer = 0;
+    // An address read out of the hash before the CSVs arrived: its filters
+    // can't be resolved against rows that don't exist yet, so it waits here
+    // for the first ingest.
+    this.pending = null;
 
     const state = this.state = {
       view: this.names[0],
@@ -436,10 +502,11 @@ class App {
       rows: {},              // view -> row objects
       q: "",
       filters: {},           // view -> col -> Set of allowed values
+      spec: {},              // view -> col -> [values] — the addressable intent
       hidden: {},            // view -> Set of hidden column keys
       sort: {},              // view -> { k, dir }
       collapsed: {},         // view -> Set of collapsed group keys
-      chip: {},              // view -> pressed legend chip, or ""
+      expanded: {},          // view -> Set of rows showing their detail
       source: "",            // "local" | "github" — which source is live
       dirHandle: null,
     };
@@ -447,8 +514,9 @@ class App {
       const def = this.views[v];
       state.rows[v] = [];
       state.filters[v] = {};
+      state.spec[v] = {};
       state.collapsed[v] = new Set();
-      state.chip[v] = "";
+      state.expanded[v] = new Set();
       state.sort[v] = { ...(def.sort || { k: def.key, dir: 1 }) };
       state.hidden[v] = new Set(def.cols.filter(c => c.off).map(c => c.k));
     }
@@ -459,6 +527,11 @@ class App {
     Dataview.app = this;      // the live app, for poking at from the console
     buildChrome(this.cfg, this.tabs);
     this.loadPrefs();
+    // A hash beats what was remembered: it is what the person following the
+    // link asked for, and they asked for it more recently. No hash is not an
+    // address, though — it's an ordinary visit, and it must leave the
+    // remembered filters and search box alone.
+    if (hasAddr()) this.readAddr(parseHash());
     this.wire();
     $("#q").value = this.state.q || "";
     if (window.FileSystemObserver) {
@@ -482,16 +555,17 @@ class App {
   savePrefs() {
     const s = this.state;
     try {
-      const hidden = {}, filters = {}, collapsed = {};
+      const hidden = {}, filters = {}, collapsed = {}, expanded = {};
       for (const v of this.names) {
         hidden[v] = [...s.hidden[v]];
         collapsed[v] = [...s.collapsed[v]];
+        expanded[v] = [...s.expanded[v]];
         filters[v] = Object.fromEntries(
           Object.entries(s.filters[v]).map(([k, set]) => [k, [...set]]));
       }
       localStorage.setItem(this.cfg.prefsKey, JSON.stringify(
-        { view: s.view, sort: s.sort, hidden, filters, collapsed, chip: s.chip, q: s.q,
-          source: s.source }));
+        { view: s.view, sort: s.sort, hidden, filters, collapsed, expanded,
+          spec: s.spec, q: s.q, source: s.source }));
     } catch {}
   }
 
@@ -506,6 +580,8 @@ class App {
         if (Array.isArray(p.hidden[v])) s.hidden[v] = new Set(p.hidden[v]);
       if (p.collapsed) for (const v of this.names)
         if (Array.isArray(p.collapsed[v])) s.collapsed[v] = new Set(p.collapsed[v]);
+      if (p.expanded) for (const v of this.names)
+        if (Array.isArray(p.expanded[v])) s.expanded[v] = new Set(p.expanded[v]);
       if (p.filters) for (const v of this.names) {
         const f = p.filters[v];
         if (!f || typeof f !== "object") continue;
@@ -513,17 +589,96 @@ class App {
           Object.entries(f).filter(([, arr]) => Array.isArray(arr))
                 .map(([k, arr]) => [k, new Set(arr)]));
       }
-      // a pressed chip only means anything next to the filter it created, so
-      // it is dropped if that filter didn't survive alongside it
-      if (p.chip) for (const v of this.names) {
-        const col = this.views[v].chipCol;
-        if (typeof p.chip[v] === "string" && col && s.filters[v][col]) s.chip[v] = p.chip[v];
+      // The intent behind those filters — what the address bar shows, and what
+      // a pressed legend chip is read back out of. Only kept where the filter
+      // it produced survived alongside it.
+      if (p.spec) for (const v of this.names) {
+        const f = p.spec[v];
+        if (!f || typeof f !== "object") continue;
+        s.spec[v] = Object.fromEntries(
+          Object.entries(f).filter(([k, arr]) => Array.isArray(arr) && s.filters[v][k]));
       }
       if (typeof p.q === "string") s.q = p.q;
       // Only remembered so start() knows which source to try first; the source
       // itself is re-established from the handle or the token, not from here.
       if (p.source === "local" || p.source === "github") s.source = p.source;
     } catch {}
+  }
+
+  /* ---- the address bar ----
+     readAddr takes what the hash says and puts it into the state; syncAddr
+     writes the state back out. Only the tab and the search box can be applied
+     straight away — a filter has to be resolved against rows, which on a cold
+     load haven't been read yet, so it waits for the first ingest. */
+  readAddr(addr) {
+    const s = this.state;
+    if (addr.tab && this.tabs.some(t => t.id === addr.tab)) s.view = addr.tab;
+    s.q = addr.q;
+    $("#q") && ($("#q").value = s.q);
+    const v = s.view;
+    if (!this.names.includes(v)) return;      // a computed tab has no filters
+    if (!Object.keys(addr.spec).length) {
+      // An address with no filters means an unfiltered tab, not "leave what
+      // was there" — otherwise a link into a tab lands on someone's old filter.
+      s.spec[v] = {}; s.filters[v] = {};
+      return;
+    }
+    if (this.state.rows[v].length) this.applySpec(v, addr.spec, true);
+    else this.pending = { view: v, spec: addr.spec };
+  }
+
+  /* Turn a filter intent into the concrete set of cell values that satisfies
+     it. `match` is what lets one asked-for value cover several cells: a
+     multi-species row, a pooled sample, an assay named for the design it was
+     prepared from. */
+  applySpec(v, spec, replace = false) {
+    const def = this.views[v];
+    // An address describes the whole view, so following one starts from a
+    // clean slate; a legend chip is one column's worth of intent and leaves
+    // the rest of the filters alone.
+    const filters = replace ? {} : this.state.filters[v];
+    const kept = replace ? {} : this.state.spec[v];
+    for (const [k, wanted] of Object.entries(spec)) {
+      if (!def.cols.some(c => c.k === k)) continue;   // not a column here
+      const m = def.match?.[k] || ((cell, want) => cell === want);
+      const set = new Set();
+      for (const r of this.state.rows[v]) {
+        const cell = r[k] ?? "";
+        if (wanted.some(w => m(cell, w))) set.add(cell);
+      }
+      filters[k] = set;
+      kept[k] = wanted;
+    }
+    this.state.filters[v] = filters;
+    this.state.spec[v] = kept;
+  }
+
+  syncAddr() {
+    const s = this.state, v = s.view;
+    const addr = { tab: v, q: s.q, spec: this.names.includes(v) ? s.spec[v] : {} };
+    // replaceState rather than assigning location.hash: this runs on every
+    // render, and a history entry per keystroke in the search box would make
+    // Back useless. Following a link is the case that *should* push, and that
+    // is the browser's own doing.
+    const url = buildHash(addr) || location.pathname + location.search;
+    try { history.replaceState(history.state, "", url); } catch {}
+  }
+
+  // A column the user filtered by hand is no longer what the link asked for.
+  unspec(v, k) {
+    if (k === undefined) this.state.spec[v] = {};
+    else delete this.state.spec[v][k];
+  }
+
+  /* Which legend chip is pressed is read back out of the intent, not out of
+     the filter it produced: one row can name several species, so inferring it
+     from the filter would light up every species named in a multi-value cell
+     rather than the one that was clicked. */
+  chipKey(v = this.state.view) {
+    const col = this.views[v]?.chipCol, spec = this.state.spec[v];
+    if (!col || !spec) return "";
+    const keys = Object.keys(spec);
+    return keys.length === 1 && keys[0] === col && spec[col].length === 1 ? spec[col][0] : "";
   }
 
   /* ---- messages ---- */
@@ -836,6 +991,12 @@ class App {
     for (const [name, text] of Object.entries(texts)) tables[name] = toObjects(text);
     const { rows, notice } = this.cfg.ingest(tables, this);
     for (const v of this.names) this.state.rows[v] = rows[v] || [];
+    // The address that arrived before the data did, now that there are rows to
+    // resolve it against.
+    if (this.pending) {
+      this.applySpec(this.pending.view, this.pending.spec, true);
+      this.pending = null;
+    }
     this.state.label = label;
     $("#src").textContent = label;
     $("#landing").classList.add("hidden");
@@ -922,6 +1083,7 @@ class App {
     if (computed) {
       $("#count").textContent = "";
       tab.render($("#pane-" + tab.id), this);
+      this.syncAddr();
       this.savePrefs();
       return;
     }
@@ -937,6 +1099,7 @@ class App {
     this.renderLegend(rows);
     requestAnimationFrame(() => this.setStickyWidth());
     def.afterRender?.(rows, this);
+    this.syncAddr();
     this.savePrefs();
   }
 
@@ -987,6 +1150,7 @@ class App {
       }
       shown++;
       frag.append(this.dataRow(r, cols, i, rows));
+      if (def.detail && s.expanded[v].has(r[def.key])) frag.append(this.detailRow(r, cols.length));
     });
 
     const tbody = $("#tbody");
@@ -1047,8 +1211,68 @@ class App {
         td.title = val;
         td.addEventListener("click", () => td.classList.toggle("open"));
       }
+      if (def.detail && c === cols[0]) td.prepend(this.twisty(row, def));
       tr.append(td);
     }
+    return tr;
+  }
+
+  /* ---- detail rows ----
+     A view whose rows are a roll-up of several underlying ones (the cDNA tab: a
+     tube, and the draws that emptied it) can hand those out on demand rather
+     than in a second table. The summary is what the table sorts and filters
+     over; the detail is the working underneath it. */
+  twisty(row, def) {
+    const v = this.state.view, key = row[def.key];
+    const open = this.state.expanded[v].has(key);
+    const b = document.createElement("button");
+    b.className = "exp";
+    b.textContent = open ? "▾" : "▸";
+    b.title = open ? "Hide the detail" : def.detail.title || "Show the detail";
+    b.setAttribute("aria-expanded", open);
+    b.addEventListener("click", e => {
+      e.stopPropagation();
+      open ? this.state.expanded[v].delete(key) : this.state.expanded[v].add(key);
+      this.render();
+    });
+    return b;
+  }
+
+  detailRow(row, span) {
+    const def = this.view(), d = def.detail;
+    const rows = d.of(row, this) || [];
+    const tr = document.createElement("tr");
+    tr.className = "det";
+    const td = document.createElement("td");
+    td.colSpan = span;
+    // Sticky rather than in flow, so the detail stays where it can be read when
+    // the (much wider) table above it is scrolled sideways.
+    const box = document.createElement("div");
+    if (!rows.length) {
+      box.className = "empty";
+      box.textContent = d.empty || "nothing recorded";
+    } else {
+      const t = document.createElement("table");
+      const head = document.createElement("tr");
+      head.innerHTML = d.cols.map(c => `<th>${esc(c.k)}</th>`).join("");
+      const body = document.createElement("tbody");
+      for (const r of rows) {
+        const line = document.createElement("tr");
+        for (const c of d.cols) {
+          const cell = document.createElement("td");
+          if (c.t.cls) cell.className = c.t.cls;
+          const val = r[c.k] ?? "";
+          if (!d.cell?.(cell, c, r, val, row)) this.defaultCell(cell, c, val);
+          line.append(cell);
+        }
+        body.append(line);
+      }
+      t.append(document.createElement("thead"), body);
+      t.firstChild.append(head);
+      box.append(t);
+    }
+    td.append(box);
+    tr.append(td);
     return tr;
   }
 
@@ -1088,7 +1312,7 @@ class App {
     el.replaceChildren();
     el.classList.toggle("hidden", !spec);
     if (!spec) return;
-    const active = this.state.chip[this.state.view];
+    const active = this.chipKey();
     if (spec.label) el.insertAdjacentHTML("beforeend", `<span class="lbl">${esc(spec.label)}</span>`);
     for (const chip of spec.chips || []) {
       const b = document.createElement("button");
@@ -1108,19 +1332,16 @@ class App {
         note.hue !== undefined ? ` style="--h:${note.hue}"` : ""}>${note.html}</span>`);
   }
 
-  /* Which chip is pressed is UI state, not something to be read back out of
-     the filter it produced: one row can name several species, so inferring
-     pressed-ness from the filter would light up every species named in a
-     multi-value cell rather than the one that was clicked. */
+  /* A chip is the same thing a link is — one value asked for on one column —
+     so it goes through the same path, and pressing it puts that value in the
+     address bar where it can be copied and sent to someone. */
   toggleChip(key) {
-    const v = this.state.view, def = this.views[v], col = def.chipCol;
-    const f = this.state.filters[v];
-    if (this.state.chip[v] === key) { this.state.chip[v] = ""; delete f[col]; }
-    else {
-      this.state.chip[v] = key;
-      const all = new Set();
-      for (const r of this.state.rows[v]) if (def.chipMatch(r, key)) all.add(r[col] ?? "");
-      f[col] = all;
+    const v = this.state.view, col = this.views[v].chipCol;
+    if (this.chipKey() === key) {
+      delete this.state.filters[v][col];
+      this.unspec(v, col);
+    } else {
+      this.applySpec(v, { [col]: [key] });
     }
     this.render();
   }
@@ -1177,9 +1398,10 @@ class App {
     const commit = () => {
       if (sel.size === values.length) delete this.state.filters[v][k];
       else this.state.filters[v][k] = new Set(sel);
-      // the column menu can express selections no single chip stands for, so a
-      // chip left pressed here would be claiming credit for someone else's filter
-      if (k === this.views[v].chipCol) this.state.chip[v] = "";
+      // The column menu can express selections no link or chip stands for, so
+      // the intent recorded for this column no longer describes it — drop it,
+      // which also unpresses a chip that would be claiming credit for it.
+      this.unspec(v, k);
       this.render();
     };
     const needle = () => search.value.toLowerCase().trim();
@@ -1230,8 +1452,21 @@ class App {
     $("#clearBtn").addEventListener("click", () => {
       const v = this.state.view;
       this.state.filters[v] = {};
-      this.state.chip[v] = "";
+      this.unspec(v);
       this.state.q = ""; $("#q").value = "";
+      this.render();
+    });
+    /* Following one of the page's own links, or the Back button after one. Our
+       own writes go through replaceState, which doesn't fire this. Going back
+       to a bare URL means leaving the address behind, so the filters it
+       brought with it go too — but not the search box, which was never part of
+       what the link claimed. */
+    addEventListener("hashchange", () => {
+      if (hasAddr()) this.readAddr(parseHash());
+      else {
+        const v = this.state.view;
+        if (this.names.includes(v)) { this.state.filters[v] = {}; this.unspec(v); }
+      }
       this.render();
     });
     $("#reloadBtn").addEventListener("click", () => this.reload());
@@ -1333,6 +1568,7 @@ function statTable(cols, rows) {
 
 return {
   App, T, DATA_FILES, TINTS,
+  link, hrefFor, buildHash, parseHash,
   $, esc, parseCSV, toObjects,
   dnum, dateOnly, yearOf, labelKey, cmpLabel, cmpText, cmpNum, cmpDate,
   median, round,

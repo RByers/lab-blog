@@ -32,25 +32,44 @@ and JavaScript — no build step, no framework, no server, and no data uploaded
 anywhere. Both tools read the same folder of MolBioLab CSVs, which you pick
 once: the chosen folder is remembered, and shared between them.
 
+The split between them is what the lab *has* versus what its assays *said*.
+
 - **[Inventory](https://lab.rbyers.ca/tools/inventory.html)**
-  (`inventory.html`) — samples, pathogens, species, primer designs and
-  reagents, one tab each, plus per-person sampling-coverage stats. Sample rows
-  are tinted by the species found in them, darker once sequenced, and swabs
-  from one illness episode are banded together.
-- **[qPCR results](https://lab.rbyers.ca/tools/qpcr.html)** (`qpcr.html`) —
+  (`inventory.html`) — samples, pathogens, species, cDNA tubes, primer designs
+  and reagents, one tab each, plus per-person sampling-coverage stats. Sample
+  rows are tinted by the species found in them, darker once sequenced, and
+  swabs from one illness episode are banded together. The cDNA tab rolls
+  `cdna.csv`'s event ledger up into one line per tube — what's left of it being
+  the sum of its own rows, never a stored number — and each line opens to show
+  the draws underneath.
+- **[Results](https://lab.rbyers.ca/tools/results.html)** (`results.html`) —
   every well × channel in `qPCR-results.csv`, gathered into runs and tinted by
-  what the assay targets (darker = positive), plus roll-ups per assay (how
-  often it comes up positive, its usual and best Cq, its contamination
-  history) and per sample (everything ever run against one swab), and a
-  per-year summary.
+  what the assay targets (darker = positive); every library in
+  `sequencing.csv`, gathered into its run, including the ones that resolved
+  nothing; plus roll-ups per assay (how often it comes up positive, its usual
+  and best Cq, its contamination history) and per sample (everything ever run
+  against one swab), and a per-year summary.
 
 Both watch the folder, so edits to a CSV show up on their own. The data lives
 in a private repository, so the tools aren't much use without it.
 
+They link into each other. A tool's URL hash is an address — the tab, the
+search box, and what the tab is filtered to:
+
+```
+inventory.html#tab=cdna&Sample=S90
+results.html#tab=results&Sample=S90
+```
+
+`tab` and `q` are reserved and every other parameter is a column name, repeated
+for several values. That is what the cross-links are built out of, so clicking
+`Confirmed+` on a sample opens the qPCR wells that call was made from, and the
+address bar always holds a link you can send to someone.
+
 The shared machinery — reading and watching the folder, sorting, filtering,
-hiding columns, the legend, the page chrome — is `dataview.js` / `dataview.css`,
-and each tool adds only its own `.js` and `.css`. A tool's `.html` is just the
-title and those four files.
+hiding columns, the legend, the address bar, the page chrome — is `dataview.js`
+/ `dataview.css`, and each tool adds only its own `.js` and `.css`. A tool's
+`.html` is just the title and those four files.
 
 ## 🧞 Commands
 

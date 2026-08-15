@@ -1,16 +1,21 @@
 /* inventory.js — the lab inventory browser.
  *
- * Samples, pathogens, species, primer designs and reagents, one tab each, plus
- * a computed per-person sampling-coverage tab. Everything generic — reading
- * the folder, sorting, filtering, hiding columns, the legend bar — lives in
- * dataview.js; what's here is what makes this tool the inventory: which
- * columns each CSV shows, how samples join to pathogens, how a row gets its
- * colour, and the cold-episode grouping.
+ * Samples, pathogens, species, cDNA tubes, primer designs and reagents, one tab
+ * each, plus a computed per-person sampling-coverage tab. Everything generic —
+ * reading the folder, sorting, filtering, hiding columns, the legend bar, the
+ * address bar — lives in dataview.js; what's here is what makes this tool the
+ * inventory: which columns each CSV shows, how samples join to pathogens, how
+ * the cDNA ledger rolls up into tubes, how a row gets its colour, and the
+ * cold-episode grouping.
  */
 "use strict";
 
 (() => {
-const { T, esc, dnum, cmpLabel, hasHue, hueOf, isWarm, statTable } = Dataview;
+const { T, esc, dnum, dateOnly, cmpLabel, hasHue, hueOf, isWarm, statTable,
+        link, round } = Dataview;
+
+// The other tool. Named once so a link to it is a link, not a string.
+const RESULTS = "results.html";
 
 /* ============================ derived state ============================
    Rebuilt from the CSVs on every ingest, and read by the view definitions
@@ -21,6 +26,9 @@ const lab = {
   coldSpan: new Map(),    // cold-episode id -> its newest date
   assaySpecies: new Map(),// primers.csv: lower-cased Label -> Species
   commensal: new Set(),   // species.csv: Species with Pathogenicity=Commensal
+  events: new Map(),      // cdna.csv: tube -> its ledger rows, in file order
+  hasCdna: new Set(),     // sample labels with at least one cDNA tube
+  samples: new Set(),     // every samples.csv Label, for deciding what to link
 };
 
 /* Commensals are deliberately left uncoloured. A row's tint is there to say
@@ -31,7 +39,8 @@ const lab = {
    are, so without that file loaded nothing is suppressed. */
 const isCommensal = s => lab.commensal.has(s);
 
-const speciesOf = row => (row.Species || "").split(" + ").map(s => s.trim()).filter(Boolean);
+const splitSpecies = v => String(v || "").split(" + ").map(s => s.trim()).filter(Boolean);
+const speciesOf = row => splitSpecies(row.Species);
 // the badges still list everything found; only the tint drops commensals, so a
 // swab whose sole hit is carriage reads as the blank row it is
 const tintSpecies = row => speciesOf(row).filter(s => !isCommensal(s));
@@ -165,7 +174,9 @@ const coloured = {
   hi: isSequenced,
   legend: speciesLegend,
   chipCol: "Species",
-  chipMatch: (r, key) => speciesOf(r).includes(key),
+  // A row can name several species, so "filtered to HRV-A" has to mean "names
+  // HRV-A", not "is exactly HRV-A" — for a legend chip and for a link alike.
+  match: { Species: (cell, want) => splitSpecies(cell).includes(want) },
   cell(td, c, row, val) {
     if (c.k === "Species" && val) {
       td.innerHTML = speciesOf(row).map(s => `<span class="badge">${esc(s)}</span>`).join(" ");
@@ -183,7 +194,7 @@ const views = {
     ...coloured,
     sort: { k: "Date", dir: 0 },      // grouped by cold episode
     cols: [
-      { k: "Label",    t: T.label },
+      { k: "Label",    t: T.label, title: "Links to this sample's cDNA tubes, where it has any" },
       { k: "Date",     t: T.date },
       { k: "Source",   t: T.narrow },
       { k: "Species",  t: T.flag },
@@ -198,7 +209,7 @@ const views = {
       { k: "Negative", t: T.clip, off: true },
       { k: "Sample",   t: T.clip, off: true },
       { k: "Extraction", t: T.clip, off: true },
-      { k: "cDNA",     t: T.date, off: true },
+      // samples.csv used to carry a cDNA date; the cDNA tab is what replaced it
       { k: "Raw?",     t: T.tick, off: true },
       { k: "Empty / Discarded", t: T.flag, off: true },
       { k: "Note",     t: T.clip },
@@ -237,6 +248,23 @@ const views = {
       if (up || down) tr.dataset.cold = !up ? "first" : !down ? "last" : "mid";
     },
     cell(td, c, row, val) {
+      // The three ways out of a sample row: its cDNA tubes (here), the qPCR
+      // wells behind the call in Confirmed+, and the sequencing libraries.
+      if (c.k === "Label" && lab.hasCdna.has(val)) {
+        td.append(link(val, "", { tab: "cdna", spec: { Sample: [val] } },
+          `cDNA tubes made from ${val}`));
+        return true;
+      }
+      if (c.k === "Confirmed+" && val) {
+        td.append(link(val, RESULTS, { tab: "results", spec: { Sample: [row.Label] } },
+          `The qPCR wells this call was made from — every well ever run on ${row.Label}`));
+        return true;
+      }
+      if (c.k === "Seq" && val) {
+        td.append(link(val, RESULTS, { tab: "sequencing", spec: { Sample: [row.Label] } },
+          `The sequencing libraries made from ${row.Label}`));
+        return true;
+      }
       if (c.k === "Cold") {
         // A tick for the episode's primary (Cold === Label), otherwise the
         // label of the primary this sample defers to.
@@ -282,6 +310,25 @@ const views = {
       { k: "Sequence", t: T.seq, off: true },
       { k: "Notes",    t: T.clip, off: true },
     ],
+    cell(td, c, row, val) {
+      if (c.k === "Sample" && val) {
+        td.append(link(val, "", { tab: "samples", spec: { Label: [val] } },
+          `${val} in samples.csv`));
+        return true;
+      }
+      // `Q2-NB03` is a sequencing.csv run and the barcode within it; the run is
+      // the half that identifies a row over there.
+      if (c.k === "Sequenced" && val) {
+        const runs = [...new Set(val.split(/[\s,;·]+/).filter(Boolean)
+          .map(t => t.split("-")[0]))];
+        if (runs.length) {
+          td.append(link(val, RESULTS, { tab: "sequencing", spec: { Run: runs } },
+            `The sequencing ${runs.length > 1 ? "runs" : "run"} behind this: ${runs.join(", ")}`));
+          return true;
+        }
+      }
+      return coloured.cell(td, c, row, val);
+    },
   },
 
   species: {
@@ -289,19 +336,28 @@ const views = {
     key: "Species",
     ...coloured,
     sort: { k: "Species", dir: 1 },
-    // Order is Virus / Bacteria / Fungus — "what kind of thing is this", not
-    // the taxonomic rank of that name (see data/species.md)
-    group: { of: r => r.Order || "", label: k => k || "(no order)" },
+    // Type is Virus / Bacteria / Fungus — "what kind of thing is this", not the
+    // taxonomic rank of the name (see data/species.md). The column was called
+    // Order until the file renamed it, for exactly that reason.
+    group: { of: r => r.Type || "", label: k => k || "(no type)" },
     cols: [
       { k: "Species", t: T.flag, title: "The short label the rest of the repo joins on" },
       { k: "Name",    t: T.clip },
-      { k: "Order",   t: T.flag, off: true },   // it's the group heading
+      { k: "Type",    t: T.flag, off: true },   // it's the group heading
       { k: "Pathogenicity", t: T.flag,
         title: "Commensal = part of a healthy respiratory microbiome, so a detection isn't by itself a finding" },
       { k: "Genome",  t: T.flag },
       { k: "RefSeq",  t: T.flag, off: true, title: "Reference genome, where the lab has settled on one" },
       { k: "Notes",   t: T.clip },
     ],
+    cell(td, c, row, val) {
+      if (c.k === "Species" && val) {
+        td.append(link(val, "", { tab: "samples", spec: { Species: [val] } },
+          `Samples this was found in`));
+        return true;
+      }
+      return false;
+    },
   },
 
   primers: {
@@ -333,6 +389,16 @@ const views = {
       { k: "citationURL", t: T.url, off: true },
       { k: "Notes",    t: T.clip },
     ],
+    cell(td, c, row, val) {
+      // A design's roll-up over there: how often it has come up positive, its
+      // usual Cq, its contamination history.
+      if (c.k === "Label" && val) {
+        td.append(link(val, RESULTS, { tab: "assays", spec: { Primer: [val] } },
+          `Every qPCR assay prepared from the ${val} design`));
+        return true;
+      }
+      return coloured.cell(td, c, row, val);
+    },
   },
 
   reagents: {
@@ -353,8 +419,153 @@ const views = {
       { k: "Use by",   t: T.date, off: true },
       { k: "Notes",    t: T.clip },
     ],
+    cell(td, c, row, val) {
+      // qPCR names its assay as it was *prepared*, which is a reagent label —
+      // so a primer tube here goes straight to the wells it was used in.
+      if (c.k === "Label" && val && /primer|probe|assay/i.test(row.Category || "")) {
+        td.append(link(val, RESULTS, { tab: "results", spec: { Primer: [val] } },
+          `qPCR wells run with ${val}`));
+        return true;
+      }
+      return coloured.cell(td, c, row, val);
+    },
+  },
+
+  /* ---- cDNA ----
+     `cdna.csv` is a ledger: one row per event, a create row per tube followed
+     by a draw row per experiment that took volume out. What you want to see is
+     the freezer — one line per tube, with what's left on it — so that is what
+     this tab is, and the events behind a line are a twisty away. Nothing here
+     stores a balance; `Left` is the sum of the tube's own rows, recomputed
+     every ingest, which is the whole reason the file is shaped this way. */
+  cdna: {
+    label: "cDNA",
+    key: "Tube",
+    ...coloured,
+    sort: { k: "Tube", dir: 1 },      // freezer order: tubes sit in sample order
+    detail: {
+      title: "Show the draws against this tube",
+      empty: "no rows — this tube is only named by other rows",
+      cols: [
+        { k: "Date",       t: T.date },
+        { k: "Experiment", t: T.clip },
+        { k: "Volume",     t: T.num },
+        { k: "Note",       t: T.clip },
+      ],
+      of: row => lab.events.get(row.Tube) || [],
+      cell(td, c, ev, val) {
+        if (c.k === "Experiment" && val && val !== "discarded") {
+          td.append(link(val, RESULTS, { tab: "results", spec: { Experiment: [val] } },
+            "The qPCR wells run in this experiment"));
+          return true;
+        }
+        // signed µL: the create row puts volume in, every other row takes it out
+        if (c.k === "Volume" && val) {
+          td.textContent = (parseFloat(val) > 0 ? "+" : "") + val;
+          td.title = parseFloat(val) > 0 ? "µL made" : "µL drawn";
+          return true;
+        }
+        return false;
+      },
+    },
+    cols: [
+      { k: "Tube",     t: T.label, title: "As written on the tube: <sample> cD, a letter for a later batch, [-n] for a log₂ dilution" },
+      { k: "Sample",   t: T.label, title: "The sample this cDNA was made from — off the tube label, except where it can't be" },
+      { k: "Species",  t: T.flag, title: "What was found in that sample" },
+      { k: "Left",     t: T.num, title: "µL remaining: the sum of this tube's rows. An upper bound, not a measurement — evaporation and unrecorded draws only push it down" },
+      { k: "Made",     t: T.num, title: "µL the synthesis (or dilution) put in" },
+      { k: "Draws",    t: T.num, title: "Experiments that have pipetted this tube" },
+      { k: "Date",     t: T.date, title: "When it was made. Blank on the few tubes no note records making" },
+      { k: "Last",     t: T.date, title: "The most recent event on this tube" },
+      { k: "Dilution", t: T.flag, title: "Neat unless stated. 4x is the standard stored working aliquot; 16x and beyond are serial-dilution tubes" },
+      { k: "Status",   t: T.flag, title: "empty = drawn to zero; discarded = cleared out of the freezer rather than pipetted" },
+      { k: "Experiment", t: T.clip, off: true, title: "The experiment that made it" },
+      { k: "Note",     t: T.clip, title: "From the create row: the RT enzyme, and any dilution" },
+    ],
+    decorate(tr, r) {
+      if (r.Status) tr.classList.add("dim");     // nothing left to pipette
+    },
+    cell(td, c, row, val) {
+      if (c.k === "Sample" && val) {
+        // A pooled tube names its members with +, and each is a real sample.
+        for (const s of val.split("+").map(x => x.trim()).filter(Boolean)) {
+          if (td.childNodes.length) td.append("+");
+          td.append(lab.samples.has(s)
+            ? link(s, "", { tab: "samples", spec: { Label: [s] } }, `${s} in samples.csv`)
+            : s);
+        }
+        return true;
+      }
+      return coloured.cell(td, c, row, val);
+    },
   },
 };
+
+/* ====================== the cDNA ledger → tubes ======================
+   One row out per tube, summed from the rows in. See data/cdna.md: a tube's
+   first row is its create row and the rest are draws, `Volume` is signed, and
+   the balance is deliberately nowhere in the file — it is this sum, so it can't
+   drift out of step with the draws behind it. */
+
+const µl = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+
+/* Where the create row leaves `Sample` blank, the tube label is the sample:
+   `S183 cD` → `S183`, `S108 cDc[-2]` → `S108`. The ~40 tubes that carry the
+   column are the ones where that doesn't hold — pools, and tubes labelled for
+   something other than their sample. */
+const sampleOfTube = tube => String(tube).replace(/\s*cD.*$/i, "").trim();
+
+/* The dilution factor is written in the create row's Note (`LunaScript, 4x`)
+   and omitted when the tube is neat. The label's bracket says the same thing in
+   log₂ — `[-2]` is 4× — so it's the fallback where the note didn't say. */
+function dilutionOf(tube, note) {
+  const m = /(?:^|[\s,;(])(\d+)\s*x\b/i.exec(note || "");
+  if (m) return m[1] + "x";
+  const b = /\[-(\d+)\]/.exec(tube);
+  return b ? Math.pow(2, +b[1]) + "x" : "";
+}
+
+function cdnaRows(events, samples) {
+  const bySample = new Map(samples.map(r => [r.Label, r]));
+  return [...events].map(([tube, rows]) => {
+    const create = rows[0];                        // a tube's first row
+    const left = rows.reduce((a, r) => a + µl(r.Volume), 0);
+    const made = rows.reduce((a, r) => a + Math.max(0, µl(r.Volume)), 0);
+    const draws = rows.filter(r => µl(r.Volume) < 0);
+    const sample = (create.Sample || sampleOfTube(tube)).trim();
+    const members = sample.split("+").map(s => s.trim()).filter(Boolean);
+    const of = f => [...new Set(members.flatMap(s => {
+      const row = bySample.get(s);
+      return row ? f(row) : [];
+    }))].filter(Boolean);
+    // The last thing that happened to it, which for most tubes is the last draw
+    const last = rows.reduce((a, r) => (dnum(r.Date) ?? -Infinity) > (dnum(a.Date) ?? -Infinity) ? r : a, create);
+
+    return {
+      Tube: tube,
+      Sample: sample,
+      // Colour and the sequenced-darkening come from the sample the cDNA is
+      // of, the same way every other tab in this tool is coloured.
+      Species: of(r => speciesOf(r)).join(" + "),
+      Seq: of(r => [r.Seq]).join(" · "),
+      // Two decimals, because the draws have two — a 0.25µL well is a real
+      // row, and rounding the sum to a tenth would make the balance disagree
+      // with the numbers it was added up from.
+      Left: round(left, 2),
+      Made: round(made, 2),
+      Draws: String(draws.length),
+      Date: dateOnly(create.Date),
+      Last: dateOnly(last.Date),
+      Dilution: dilutionOf(tube, create.Note),
+      // `discarded` is the file's one reserved Experiment: a tube thrown out
+      // rather than pipetted. Everything else that reaches zero was used up.
+      Status: rows.some(r => r.Experiment === "discarded") ? "discarded"
+        : left <= 0 ? "empty" : "",
+      Experiment: create.Experiment || "",
+      Note: create.Note || "",
+    };
+  });
+}
 
 /* ============================ stats ============================
    Per-person coverage of the sampling programme. An illness episode is counted
@@ -422,7 +633,9 @@ function ingest(tables) {
     species: tables["species.csv"]?.rows || [],
     primers: tables["primers.csv"]?.rows || [],
     reagents: tables["reagents.csv"]?.rows || [],
+    cdna: [],                     // rolled up below, once samples are enriched
   };
+  lab.samples = new Set(rows.samples.map(r => r.Label));
 
   lab.commensal = new Set(rows.species
     .filter(r => (r.Pathogenicity || "").trim() === "Commensal")
@@ -462,6 +675,18 @@ function ingest(tables) {
   }
   findColds(rows.samples);
 
+  // The cDNA ledger, gathered by tube. Done after the loop above, so a tube
+  // inherits the species its sample ended up with rather than the bare
+  // pathogens.csv join.
+  lab.events = new Map();
+  for (const r of tables["cdna.csv"]?.rows || []) {
+    if (!r.Tube) continue;
+    if (!lab.events.has(r.Tube)) lab.events.set(r.Tube, []);
+    lab.events.get(r.Tube).push(r);
+  }
+  rows.cdna = cdnaRows(lab.events, rows.samples);
+  lab.hasCdna = new Set(rows.cdna.flatMap(r => r.Sample.split("+").map(s => s.trim())));
+
   // Say so rather than quietly leaving those rows uncoloured.
   let notice = "";
   if (!tables["primers.csv"]) {
@@ -477,12 +702,12 @@ function ingest(tables) {
 
 const app = new Dataview.App({
   title: "Inventory",
-  prefsKey: "molbiolab.inventory.v4",
+  prefsKey: "molbiolab.inventory.v5",
   required: ["samples.csv", "pathogens.csv"],
   landing: "Pick the folder holding <code>samples.csv</code> and <code>pathogens.csv</code> "
     + "(plus <code>primers.csv</code> for result colouring, and <code>species.csv</code> / "
-    + "<code>reagents.csv</code> for those tabs) — the repo root or its <code>data/</code> "
-    + "folder both work. Nothing leaves this machine; the page only reads the files.",
+    + "<code>reagents.csv</code> / <code>cdna.csv</code> for those tabs) — the repo root or its "
+    + "<code>data/</code> folder both work. Nothing leaves this machine; the page only reads the files.",
   views,
   tabs: [{ id: "stats", label: "Stats", render: renderStats }],
   ingest,

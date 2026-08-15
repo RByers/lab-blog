@@ -1,21 +1,27 @@
-/* qpcr.js — the qPCR results browser.
+/* results.js — the results browser: what the lab's assays actually said.
  *
  * `data/qPCR-results.csv` is one row per well × channel, every legitimate run
- * this lab has done since June 2020. Individual experiment notes say what
- * happened on a day; this file exists for the cross-experiment questions, and
- * this tool is for asking them: what Cq does `ENT rc` usually give, how far
- * back does an assay's contamination go, what has ever been run on S90.
+ * this lab has done since June 2020, and `data/sequencing.csv` one row per
+ * library × run, every attempt to read something out including the ones that
+ * read nothing. Individual experiment notes say what happened on a day; those
+ * files exist for the cross-experiment questions, and this tool is for asking
+ * them: what Cq does `ENT rc` usually give, how far back does an assay's
+ * contamination go, what has ever been run on S90, which flow cells were worth
+ * the money.
  *
- * Three tables over the same rows — the wells themselves, rolled up per assay,
- * and rolled up per sample — plus a per-year summary. The generic machinery
- * (folder, sorting, filtering, columns, legend) is dataview.js; the same
- * folder and the same species colours as the inventory.
+ * Four tables — the wells themselves, rolled up per assay, rolled up per
+ * sample, and the sequencing libraries — plus a per-year summary. The generic
+ * machinery (folder, sorting, filtering, columns, legend, the address bar) is
+ * dataview.js; the same folder and the same species colours as the inventory.
  */
 "use strict";
 
 (() => {
 const { T, esc, dnum, dateOnly, yearOf, cmpLabel, cmpText, median, round,
-        hasHue, hueOf, isWarm, statTable } = Dataview;
+        hasHue, hueOf, isWarm, statTable, link } = Dataview;
+
+// The other tool. Named once so a link to it is a link, not a string.
+const INVENTORY = "inventory.html";
 
 /* ============================ conventions ============================ */
 
@@ -60,11 +66,18 @@ const runSort = s => s.k === "Date" && s.dir === 0;
 const parts = v => String(v || "").split(" + ").map(s => s.trim()).filter(Boolean);
 const speciesOf = row => parts(row.Species);
 
+/* A pooled sample is written `S46+S53+S84`, and each member really was tested —
+   so "the wells for S90" has to find the pools S90 sat in as well as its own
+   rows. Same convention in cdna.csv and sequencing.csv. */
+const pool = v => String(v || "").split("+").map(s => s.trim()).filter(Boolean);
+
 /* ============================ derived state ============================ */
 const lab = {
   primer: new Map(),      // lower-cased primers.csv Label -> row
   primerLabels: [],       // same keys, longest first, for the prefix fallback
   source: new Map(),      // samples.csv Label -> Source
+  tubes: new Set(),       // cdna.csv Tube labels, so a submitted tube can link
+  seqRuns: new Map(),     // samples.csv Label -> the runs it was sequenced in
 };
 
 /* `Primer` names the assay as it was *prepared*, so it matches a reagent tube
@@ -130,7 +143,18 @@ const coloured = {
   tints: speciesOf,
   legend: speciesLegend,
   chipCol: "Species",
-  chipMatch: (r, key) => speciesOf(r).includes(key),
+  /* What one asked-for value is allowed to match, for a legend chip and for a
+     link into this tab alike. All three are the same shape of problem: the cell
+     holds more than the one thing being asked about. */
+  match: {
+    Species: (cell, want) => parts(cell).includes(want),
+    Sample: (cell, want) => pool(cell).includes(want),
+    // `Primer` is the assay as *prepared*, so a link from a primers.csv design
+    // (`HRV ma`) has to reach every preparation of it (`HRV ma grn`, `HRV ma
+    // Cy5`) — which is the same prefix rule design() resolves by.
+    Primer: (cell, want) => parts(cell).some(p =>
+      p === want || p.toLowerCase().startsWith(want.toLowerCase() + " ")),
+  },
 };
 
 // Species and Determination render the same way wherever they appear.
@@ -173,12 +197,14 @@ const views = {
       of: runOf,
       cmp: cmpRun,
       label: k => k || "(no date)",
-      // what the run was: the instrument, and the assays it carried
+      // what the run was: the note it belongs to, the instrument, the assays
       sub: (k, rows) => {
+        const exp = [...new Set(rows.map(r => r.Experiment).filter(Boolean))];
         const inst = [...new Set(rows.map(r => instrumentOf(r.Channel)).filter(Boolean))];
         const assays = [...new Set(rows.flatMap(r => parts(r.Primer)))];
         const pos = rows.filter(isPositive).length;
         return [
+          exp.join(", "),
           inst.join("/"),
           assays.slice(0, 6).join(", ") + (assays.length > 6 ? `, +${assays.length - 6}` : ""),
           pos ? `${pos} positive` : "",
@@ -190,7 +216,8 @@ const views = {
       // column — so it clips, and a click opens the one row that needs it
       { k: "Sample",   t: { cls: "clip sample", cmp: cmpLabel },
         title: "Sample label, indexing samples.csv; NTC for a no-template control" },
-      { k: "Date",     t: T.date, title: "The run — the join key into experiments/" },
+      { k: "Date",     t: T.date, title: "When the run was read" },
+      { k: "Experiment", t: T.clip, title: "The experiments/ folder this row belongs to — the join key into the notes" },
       { k: "Species",  t: T.flag, title: "What this well's assays target, via primers.csv" },
       { k: "Primer",   t: T.flag, title: "The assay as it was prepared" },
       { k: "Determination", t: T.flag, title: "The subjective call for this well/channel — expected to change as later experiments learn more" },
@@ -212,7 +239,9 @@ const views = {
       { k: "DNase",    t: T.flag, off: true },
       { k: "T-Anneal", t: num, off: true, title: "Anneal/extension temperature (°C)" },
       { k: "T-RT",     t: num, off: true, title: "Reverse transcription temperature (°C)" },
-      { k: "Multiplex", t: num, off: true, title: "Number of assays sharing this well" },
+      // Multiplex used to be a column here. It was dropped because the count
+      // *is* the number of rows sharing a Date/Well, and a stored copy of it
+      // went stale the moment a channel was corrected.
       { k: "Threshold", t: num, off: true, title: "The RFU threshold the software called Cq against — Cq is sensitive to it" },
       { k: "Dye Cq",   t: { ...cqCol }, off: true, title: "A second Cq for the same well, read from an intercalating dye" },
       { k: "Norm Cq",  t: { ...cqCol }, off: true, title: "Cq adjusted to a common sample input, so runs loading different amounts compare" },
@@ -239,7 +268,26 @@ const views = {
       // Failed is "the run didn't work here", not a result — kept, but muted
       if (r.Determination === "Failed") tr.classList.add("dim");
     },
-    cell: commonCell,
+    cell(td, c, row, val) {
+      if (c.k === "Sample" && val && val !== "NTC") {
+        // a pool is several samples, and each one has its own row over there
+        for (const s of pool(val)) {
+          if (td.childNodes.length) td.append("+");
+          td.append(link(s, INVENTORY, { tab: "samples", spec: { Label: [s] } },
+            `${s} in samples.csv`));
+        }
+        return true;
+      }
+      if (c.k === "Primer" && val) {
+        for (const p of parts(val)) {
+          if (td.childNodes.length) td.append(" + ");
+          td.append(link(p, "", { tab: "assays", spec: { Primer: [p] } },
+            `Everything ${p} has ever been run on`));
+        }
+        return true;
+      }
+      return commonCell(td, c, row, val);
+    },
   },
 
   assays: {
@@ -269,7 +317,14 @@ const views = {
       { k: "Last",     t: T.date },
       { k: "Author",   t: T.flag, off: true, title: "Whose published design it is, from primers.csv" },
     ],
-    cell: commonCell,
+    cell(td, c, row, val) {
+      if (c.k === "Primer" && val) {
+        td.append(link(val, "", { tab: "results", spec: { Primer: [val] } },
+          `The ${row.Wells} wells behind this row`));
+        return true;
+      }
+      return commonCell(td, c, row, val);
+    },
   },
 
   samples: {
@@ -291,10 +346,109 @@ const views = {
       { k: "Cq best",  t: num, title: "Lowest Cq called on any positive well" },
       { k: "B2M",      t: num, title: "Best Cq on the B2M host control — how much human material the extraction got" },
       { k: "Tested",   t: T.clip, off: true, title: "Every assay ever run against this sample" },
+      { k: "Seq",      t: T.flag, title: "Sequencing runs this sample was in a library for" },
       { k: "First",    t: T.date },
       { k: "Last",     t: T.date },
     ],
-    cell: commonCell,
+    cell(td, c, row, val) {
+      if (c.k === "Sample" && val) {
+        td.append(link(val, "", { tab: "results", spec: { Sample: [val] } },
+          `The ${row.Wells} wells behind this row`));
+        return true;
+      }
+      if (c.k === "Source" && val) {
+        td.append(link(val, INVENTORY, { tab: "samples", spec: { Source: [val] } },
+          `Every sample from ${val}`));
+        return true;
+      }
+      if (c.k === "Seq" && val) {
+        td.append(link(val, "", { tab: "sequencing", spec: { Sample: [row.Sample] } },
+          `The libraries made from ${row.Sample}`));
+        return true;
+      }
+      return commonCell(td, c, row, val);
+    },
+  },
+
+  /* ---- sequencing ----
+     `sequencing.csv` is one row per library × run: what went in, and what came
+     back out. The failures are the point of keeping it — 48 of the 73 rows
+     resolved nothing, and a file of only the successes would answer "what did
+     we find?" but never "what does it cost to find it?". So the default view is
+     every library, gathered into its run, with the verdict on each. */
+  sequencing: {
+    label: "Sequencing",
+    key: "Sample",
+    ...coloured,
+    hi: r => r.Determination === "Genotyped",
+    sort: { k: "Date", dir: 0 },                // grouped by run
+    group: {
+      when: s => s.k === "Date" && s.dir === 0,
+      of: r => r.Run || "",
+      cmp: (a, b) => (!a - !b) || cmpLabel(b, a),      // newest run first
+      label: (k, rows) => {
+        const alias = rows.find(r => r.Alias)?.Alias;
+        return k + (alias ? ` / ${alias}` : "") || "(no run)";
+      },
+      // what the run was: when, who did it, on what chemistry, and how it went
+      sub: (k, rows) => {
+        const one = f => [...new Set(rows.map(f).filter(Boolean))].join(", ");
+        const got = rows.filter(r => r.Determination === "Genotyped").length;
+        return [dateOnly(rows[0]?.Date), one(r => r.Provider), one(r => r.Service),
+                got ? `${got} genotyped` : "nothing genotyped"].filter(Boolean).join(" · ");
+      },
+    },
+    cols: [
+      { k: "Sample",   t: { cls: "clip sample", cmp: cmpLabel },
+        title: "The samples.csv label sequenced; pooled libraries join their members with +" },
+      { k: "Run",      t: T.label, title: "Q1–Q11, the canonical run id — what pathogens.csv cites" },
+      { k: "Date",     t: T.date, title: "When the run started, or when samples were submitted to a provider" },
+      { k: "Species",  t: T.flag, title: "What the amplicon targets, via primers.csv" },
+      { k: "Determination", t: T.flag, title: "The verdict on this library. Blank means none was ever recorded — not that it failed" },
+      { k: "Amplicon", t: T.clip, title: "What was amplified: primers.csv designs, or an assays.csv panel" },
+      { k: "Tube",     t: T.flag, title: "The tube submitted, as written on it — a cDNA tube, or an amplicon" },
+      { k: "Barcode",  t: T.flag, title: "The index separating this library from the others in its run. Blank means the run wasn't barcoded" },
+      { k: "Reads",    t: T.num, title: "Total reads assigned to this barcode. 0 is a real value" },
+      { k: "On-target", t: T.flag, title: "Reads that hit the intended target — the gap against Reads is the story of a run. Eyeballed off a read-mapping plot, so ranges are kept as written" },
+      { k: "Coverage", t: T.flag, off: true, title: "Percent of the target genome covered — only the tiled whole-genome run" },
+      { k: "Provider", t: T.flag },
+      { k: "Service",  t: T.clip, title: "The chemistry: <flow cell> / <kit> self-run, or the provider's service tier" },
+      { k: "Alias",    t: T.flag, off: true, title: "The run's other name, where it has one" },
+      { k: "PCR Date", t: T.date, off: true, title: "When the amplicon was made — what tells two tubes of one sample apart" },
+      { k: "Conc ng/µL", t: T.num, off: true, title: "Quantus reading before any dilution for submission" },
+      { k: "Source",   t: T.flag, off: true, title: "Who the sample came from, via samples.csv" },
+      { k: "Data",     t: T.url, off: true, title: "Where the delivered reads live" },
+      { k: "Notes",    t: T.clip },
+    ],
+    nextSort(k, s) {
+      if (k !== "Date") return null;
+      if (s.k !== k) return { k, dir: 0 };
+      return { k, dir: s.dir === 0 ? -1 : s.dir === -1 ? 1 : 0 };
+    },
+    sortHelp: k => k === "Date" ? "gather each run into a group, then sort by Date" : null,
+    decorate(tr, r) {
+      // the run itself didn't work under this library — kept, but muted
+      if (/^(Failed|No reads)$/.test(r.Determination)) tr.classList.add("dim");
+    },
+    cell(td, c, row, val) {
+      if (c.k === "Sample" && val) {
+        for (const s of pool(val)) {
+          if (td.childNodes.length) td.append("+");
+          td.append(link(s, INVENTORY, { tab: "samples", spec: { Label: [s] } },
+            `${s} in samples.csv`));
+        }
+        return true;
+      }
+      // Where the tube is a cdna.csv row the cDNA was submitted directly, and
+      // the ledger says what was left of it afterwards. An amplicon tube isn't
+      // tracked as inventory anywhere, so it stays plain text.
+      if (c.k === "Tube" && val && lab.tubes.has(val)) {
+        td.append(link(val, INVENTORY, { tab: "cdna", spec: { Tube: [val] } },
+          `${val} in the cDNA ledger`));
+        return true;
+      }
+      return commonCell(td, c, row, val);
+    },
   },
 };
 
@@ -391,9 +545,22 @@ function sampleRows(results) {
       "Cq best": cqs.length ? round(Math.min(...cqs)) : "",
       B2M: b2m.length ? round(Math.min(...b2m)) : "",
       Tested: uniq(rows.flatMap(r => parts(r.Primer))).sort(cmpText).join(", "),
+      Seq: [...(lab.seqRuns.get(name) || [])].join(", "),
       First: first, Last: last,
     };
   });
+}
+
+/* An amplicon names one or more primers.csv designs (or an assays.csv panel),
+   comma-separated — so a library is coloured by what it was trying to read,
+   which is the same rule the qPCR tables are coloured by. */
+function ampliconSpecies(amplicon) {
+  const out = [];
+  for (const name of String(amplicon || "").split(",").map(s => s.trim()).filter(Boolean)) {
+    const sp = (design(name)?.Species || "").trim();
+    if (sp && !out.includes(sp)) out.push(sp);
+  }
+  return out;
 }
 
 /* ============================ stats ============================ */
@@ -468,12 +635,26 @@ function ingest(tables) {
   for (const s of tables["samples.csv"]?.rows || []) {
     if (s.Label) lab.source.set(s.Label, s.Source || "");
   }
+  lab.tubes = new Set((tables["cdna.csv"]?.rows || []).map(r => r.Tube).filter(Boolean));
 
   const unknown = new Map();
   for (const r of results.rows) {
     r.Species = assaySpecies(r.Primer, unknown).join(" + ");
     r.Instrument = instrumentOf(r.Channel);
-    r.Source = uniq(String(r.Sample).split("+").map(x => lab.source.get(x.trim()))).join(" + ");
+    r.Source = uniq(pool(r.Sample).map(x => lab.source.get(x))).join(" + ");
+  }
+
+  // Sequencing first: the per-sample roll-up wants to say which runs a sample
+  // was in, and that is read off these rows.
+  const sequencing = tables["sequencing.csv"]?.rows || [];
+  lab.seqRuns = new Map();
+  for (const r of sequencing) {
+    r.Species = ampliconSpecies(r.Amplicon).join(" + ");
+    r.Source = uniq(pool(r.Sample).map(x => lab.source.get(x))).join(" + ");
+    for (const s of pool(r.Sample)) {
+      if (!lab.seqRuns.has(s)) lab.seqRuns.set(s, new Set());
+      lab.seqRuns.get(s).add(r.Run);
+    }
   }
 
   let notice = "";
@@ -491,19 +672,20 @@ function ingest(tables) {
       results: results.rows,
       assays: assayRows(results.rows),
       samples: sampleRows(results.rows),
+      sequencing,
     },
     notice,
   };
 }
 
 const app = new Dataview.App({
-  title: "qPCR",
-  prefsKey: "molbiolab.qpcr.v1",
+  title: "Results",
+  prefsKey: "molbiolab.results.v1",
   required: ["qPCR-results.csv"],
-  landing: "Pick the folder holding <code>qPCR-results.csv</code> (plus <code>primers.csv</code> "
-    + "for the assay targets and <code>samples.csv</code> for who each sample came from) — the repo "
-    + "root or its <code>data/</code> folder both work. Nothing leaves this machine; the page only "
-    + "reads the files.",
+  landing: "Pick the folder holding <code>qPCR-results.csv</code> (plus <code>sequencing.csv</code> "
+    + "for that tab, <code>primers.csv</code> for the assay targets and <code>samples.csv</code> for "
+    + "who each sample came from) — the repo root or its <code>data/</code> folder both work. "
+    + "Nothing leaves this machine; the page only reads the files.",
   views,
   tabs: [{ id: "stats", label: "Stats", render: renderStats }],
   ingest,

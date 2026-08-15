@@ -1,7 +1,7 @@
 /* dataview.css — the chrome every tool in this folder shares: theme, header,
    tab strip, notice bar, legend, table, popover menus, stats tables and the
    landing card. Anything specific to one tool lives in that tool's own
-   stylesheet (inventory.css, qpcr.css), which is loaded after this one. */
+   stylesheet (inventory.css, results.css), which is loaded after this one. */
 
 /* ---------- theme ---------- */
 :root {
@@ -263,6 +263,33 @@ tr.grp td:hover { color: var(--accent); }
 tr.grp .n { color: var(--ink-dim); font-weight: 400; font-variant-numeric: tabular-nums; }
 tr.grp .sub { color: var(--ink-dim); font-weight: 400; margin-left: 6px; }
 tr.grp .tw { display: inline-block; width: 10px; color: var(--ink-dim); }
+
+/* ---------- detail rows ----------
+   The draws under a cDNA tube: a small table hung off the summary row rather
+   than a second tab. It is sticky at the left edge so it stays readable when
+   the (far wider) table above it is scrolled sideways, and it sets no column
+   widths of its own — the cell it lives in spans them all. */
+button.exp {
+  border: 0; background: none; color: var(--ink-dim); padding: 0 4px 0 0;
+  font-size: 10px; line-height: 1;
+}
+button.exp:hover { color: var(--accent); }
+tr[data-tint] button.exp { color: inherit; opacity: .6; }
+tr.det > td { padding: 0; background: var(--panel-2); position: static; }
+tr.det > td > div {
+  position: sticky; left: 0; display: inline-block;
+  padding: 7px 8px 9px 26px; max-width: min(100vw, 60rem);
+}
+tr.det .empty { color: var(--ink-dim); font-style: italic; }
+tr.det table { width: auto; min-width: 0; }
+tr.det th {
+  text-align: left; font-weight: 600; color: var(--ink-dim); font-size: 11px;
+  padding: 0 10px 2px 0; white-space: nowrap;
+}
+tr.det td {
+  padding: 1px 10px 1px 0; border: 0; background: none;
+  font-weight: 400; position: static; max-width: 30rem;
+}
 
 .badge {
   display: inline-block; padding: 0 6px; border-radius: 999px; font-size: 11px; font-weight: 600;
