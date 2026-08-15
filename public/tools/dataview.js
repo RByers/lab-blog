@@ -238,6 +238,100 @@ async function idbGet() {
   } catch { return null; }
 }
 
+/* ===================== GitHub as a source =====================
+   The folder modes need a checkout; this one doesn't, so the tools work from a
+   phone or a borrowed machine. Only api.github.com is involved, and it sends
+   `access-control-allow-origin: *`, so no server is needed — but that is also
+   why this is a pasted token rather than a "Login with GitHub" button:
+   github.com/login/oauth/* sends no CORS headers at all, so the code-for-token
+   exchange can't happen in a page. A fine-grained token scoped to the one repo
+   with Contents: Read-only is a narrower grant than OAuth could give anyway
+   (the OAuth `repo` scope is read *and write* to *every* private repo).
+
+   Reads go through the git data API rather than the contents API: one request
+   for `trees/HEAD:data` returns the tree's own sha — a version id for the whole
+   folder — alongside every blob's sha, so a poll costs one request and says
+   both *whether* anything changed and *which* files did. Blobs are then fetched
+   by sha, which is content-addressed and so can't race a push mid-read.
+
+   Like the directory handle, the token is shared by every tool here: paste it
+   in one and the others come up already able to read. */
+const GH_REPO = "RByers/MolBioLab";
+const GH_DIR = "data";
+const GH_TOKEN_LS = "molbiolab.gh.token";
+const GH_POLL_MS = 60_000;
+
+function ghToken() {
+  try { return localStorage.getItem(GH_TOKEN_LS) || ""; } catch { return ""; }
+}
+function ghSetToken(t) {
+  try {
+    if (t) localStorage.setItem(GH_TOKEN_LS, t);
+    else localStorage.removeItem(GH_TOKEN_LS);
+  } catch {}
+}
+
+/* A thrown message here goes straight to the user, so the statuses that mean
+   different things to them are told apart: a token that isn't valid, a token
+   that is valid but can't see this repo, and a rate limit. */
+function ghErr(status, msg) {
+  const e = new Error(msg);
+  e.status = status;             // so callers can branch without reading prose
+  return e;
+}
+
+async function ghApi(path, { raw = false, etag = "" } = {}) {
+  let r;
+  try {
+    r = await fetch(`https://api.github.com/repos/${GH_REPO}/${path}`, {
+      // Skip the HTTP cache so our own If-None-Match is what gets answered —
+      // otherwise a cached 200 can stand in for the 304 we're looking for.
+      cache: "no-store",
+      headers: {
+        Authorization: `Bearer ${ghToken()}`,
+        Accept: raw ? "application/vnd.github.raw" : "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        ...(etag ? { "If-None-Match": etag } : {}),
+      },
+    });
+  } catch {
+    throw ghErr(0, "Couldn't reach GitHub — check the network connection.");
+  }
+  if (r.status === 401) {
+    throw ghErr(401, "GitHub rejected that token (401) — it may be mistyped, expired, or revoked.");
+  }
+  if (r.status === 404) {
+    throw ghErr(404, `Token can't see ${GH_REPO}/${GH_DIR} (404) — check it grants `
+                   + "Contents: Read-only on that repository.");
+  }
+  if (r.status === 403 || r.status === 429) {
+    throw ghErr(r.status, "GitHub is rate-limiting this token — try again in a few minutes.");
+  }
+  if (!r.ok && r.status !== 304) throw ghErr(r.status, `GitHub returned ${r.status}.`);
+  return r;
+}
+
+/* The tree of the data folder: its version sha, every blob's sha, and the ETag
+   that lets the next poll be free. Null when the ETag says nothing moved. */
+async function ghTree({ etag = "" } = {}) {
+  const r = await ghApi(`git/trees/HEAD:${GH_DIR}`, { etag });
+  if (r.status === 304) return null;                 // nothing changed
+  const j = await r.json();
+  const shas = new Map();
+  for (const e of j.tree || []) {
+    if (e.type !== "blob") continue;
+    const want = DATA_FILES.find(n => n.toLowerCase() === e.path.toLowerCase());
+    if (want) shas.set(want, e.sha);
+  }
+  return { sha: j.sha, shas, etag: r.headers.get("ETag") || "" };
+}
+
+async function ghBlob(sha) {
+  return (await ghApi(`git/blobs/${sha}`, { raw: true })).text();
+}
+
+function ghLabel(sha) { return `${GH_REPO.split("/")[1]}@${sha.slice(0, 7)}`; }
+
 /* ============================ page chrome ============================
    Built here rather than written out in each tool's HTML: it is the same
    header, legend, table and landing card every time, and two copies of it in
@@ -259,8 +353,8 @@ function buildChrome(cfg, tabs) {
       `<button role="tab" id="tab-${t.id}" aria-selected="false">${esc(t.label)}</button>`).join("")}</div>
     <div class="spacer"></div>
     <span class="count" id="count"></span>
-    <button class="btn" id="reloadBtn" title="Re-read the CSVs from disk">↻</button>
-    <button class="btn" id="folderBtn">Folder…</button>
+    <button class="btn" id="reloadBtn" title="Re-read the data">↻</button>
+    <button class="btn" id="folderBtn" title="Change where the data comes from">Source…</button>
   </div>
   <div class="row" id="filterRow">
     <input class="search" id="q" type="search" placeholder="Search all columns…" autocomplete="off">
@@ -282,13 +376,30 @@ ${tabs.filter(t => t.render).map(t =>
 <section class="landing hidden" id="landing">
   <div class="card" id="card">
     <h2>Open your lab data folder</h2>
-    <p>${cfg.landing}</p>
+    <p>${cfg.landing}
+       (The GitHub option below is the one exception — it talks to GitHub.)</p>
     <div class="row">
       <button class="btn primary hidden" id="reopen">Reopen</button>
       <button class="btn" id="pickDir">Choose folder…</button>
       <button class="btn" id="pickFiles">Choose files…</button>
     </div>
     <p class="hint" id="hint">…or drop the folder (or the CSVs) anywhere on this page.</p>
+
+    <div class="alt">
+      <h3>…or read them from GitHub</h3>
+      <p>For a machine with no checkout. Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">fine-grained token</a>
+         with repository access limited to <code>${esc(GH_REPO.split("/")[1])}</code> and the single
+         permission <code>Contents: Read-only</code>, then paste it here.</p>
+      <div class="row">
+        <input class="tok" type="password" id="ghToken" autocomplete="off"
+               spellcheck="false" placeholder="github_pat_…" aria-label="GitHub token">
+        <button class="btn primary" id="ghLoad">Load from GitHub</button>
+        <button class="btn hidden" id="ghForget">Forget token</button>
+      </div>
+      <p class="caveat">The token is kept in this browser's localStorage, where script on
+         this origin can read it — so scope it to the one repo, read-only, and give it an expiry.</p>
+    </div>
+
     <p class="err" id="err"></p>
   </div>
 </section>
@@ -312,6 +423,12 @@ class App {
     ];
     this.observer = null;
     this.watchTimer = 0;
+    // The remote folder as of the last read: its ETag, its blob shas and the
+    // texts, kept so a poll only has to refetch what actually moved.
+    this.ghEtag = "";
+    this.ghShas = new Map();
+    this.ghTexts = {};
+    this.ghTimer = 0;
 
     const state = this.state = {
       view: this.names[0],
@@ -323,6 +440,7 @@ class App {
       sort: {},              // view -> { k, dir }
       collapsed: {},         // view -> Set of collapsed group keys
       chip: {},              // view -> pressed legend chip, or ""
+      source: "",            // "local" | "github" — which source is live
       dirHandle: null,
     };
     for (const v of this.names) {
@@ -344,12 +462,17 @@ class App {
     this.wire();
     $("#q").value = this.state.q || "";
     if (window.FileSystemObserver) {
-      $("#reloadBtn").title = "Re-read the CSVs from disk — though a picked folder "
+      $("#reloadBtn").title = "Re-read the data — though a picked folder "
         + "is watched, so edits normally appear on their own";
     }
     this.showLanding();
     if (!window.showDirectoryPicker) this.noteFallback();
-    this.restoreDir();
+    this.syncGhButtons();
+    $("#ghToken").value = ghToken();
+    // Come back up on whichever source was last in use; if that doesn't produce
+    // data the landing card is already showing, which is the right fallback.
+    if (this.state.source === "github" && ghToken()) this.loadFromGitHub();
+    else this.restoreDir();
   }
 
   /* ---- preferences ----
@@ -367,7 +490,8 @@ class App {
           Object.entries(s.filters[v]).map(([k, set]) => [k, [...set]]));
       }
       localStorage.setItem(this.cfg.prefsKey, JSON.stringify(
-        { view: s.view, sort: s.sort, hidden, filters, collapsed, chip: s.chip, q: s.q }));
+        { view: s.view, sort: s.sort, hidden, filters, collapsed, chip: s.chip, q: s.q,
+          source: s.source }));
     } catch {}
   }
 
@@ -396,6 +520,9 @@ class App {
         if (typeof p.chip[v] === "string" && col && s.filters[v][col]) s.chip[v] = p.chip[v];
       }
       if (typeof p.q === "string") s.q = p.q;
+      // Only remembered so start() knows which source to try first; the source
+      // itself is re-established from the handle or the token, not from here.
+      if (p.source === "local" || p.source === "github") s.source = p.source;
     } catch {}
   }
 
@@ -443,7 +570,10 @@ class App {
       try { base = await dir.getDirectoryHandle("data"); } catch { /* readAll reports it */ }
     }
     const texts = await this.readAll(base);
+    this.ghUnwatch();                 // the two sources are mutually exclusive
+    this.state.source = "local";
     this.state.dirHandle = base;
+    this.savePrefs();
     // Remember the folder the user picked (not `base`) so a later reopen goes
     // through the same repo-root-or-data/ resolution.
     idbPut(dir);
@@ -465,7 +595,10 @@ class App {
     }
     // a picked File is a snapshot with no handle behind it: nothing to watch
     this.unwatch();
+    this.ghUnwatch();
+    this.state.source = "local";
     this.state.dirHandle = null;
+    this.savePrefs();
     const got = Object.keys(picked);
     return Promise.all(got.map(n => picked[n].text())).then(vals => {
       this.ingest(Object.fromEntries(got.map((n, i) => [n, vals[i]])), label);
@@ -494,8 +627,103 @@ class App {
     }
   }
 
+  /* ===================== reading from GitHub =====================
+     The remote counterpart of the folder modes: same files, fetched by sha.
+     Only what the tree says we don't already hold is refetched, in parallel,
+     so a poll that finds one changed CSV pays for one blob. */
+  async ghReadAll(shas) {
+    const texts = {};
+    await Promise.all(DATA_FILES.filter(n => shas.has(n)).map(async n => {
+      if (this.ghShas.get(n) === shas.get(n) && this.ghTexts[n] !== undefined) {
+        texts[n] = this.ghTexts[n];
+      } else {
+        texts[n] = await ghBlob(shas.get(n));
+      }
+    }));
+    const missing = this.cfg.required.filter(n => texts[n] === undefined);
+    if (missing.length) {
+      throw new Error(`${GH_REPO}/${GH_DIR} has no ` + missing.join(" / ") + ".");
+    }
+    return texts;
+  }
+
+  // Read the tree, fetch what moved, and adopt it as the current remote state.
+  async ghFetch(tree) {
+    const texts = await this.ghReadAll(tree.shas);
+    this.ghTexts = texts;
+    this.ghEtag = tree.etag;
+    this.ghShas = tree.shas;
+    return { texts, label: ghLabel(tree.sha) };
+  }
+
+  async loadFromGitHub() {
+    if (!ghToken()) { this.err("Paste a GitHub token first."); return; }
+    const btn = $("#ghLoad");
+    const was = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Loading…";
+    try {
+      const { texts, label } = await this.ghFetch(await ghTree());
+      // a remote read has no folder behind it: stop watching one
+      this.unwatch();
+      this.state.dirHandle = null;
+      this.state.source = "github";
+      this.savePrefs();
+      this.ingest(texts, label);
+      this.ghWatch();
+    } catch (e) {
+      this.err(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = was;
+    }
+  }
+
+  /* The remote counterpart of the FileSystemObserver: poll the tree, but
+     conditionally. A 304 doesn't count against the rate limit, so the steady
+     state of this is free — and while the tab is hidden it doesn't even do
+     that. */
+  ghWatch() {
+    this.ghUnwatch();
+    this.ghTimer = setInterval(() => { if (!document.hidden) this.ghPoll(); }, GH_POLL_MS);
+  }
+
+  ghUnwatch() {
+    clearInterval(this.ghTimer);
+    this.ghTimer = 0;
+  }
+
+  async ghPoll() {
+    if (this.state.source !== "github" || !ghToken()) return;
+    let t;
+    try {
+      t = await ghTree({ etag: this.ghEtag });
+    } catch (e) {
+      // A revoked token or a rate limit would otherwise fail again every 60s:
+      // say so once and stop. A transient network blip waits for the next tick.
+      if (e.status === 401 || e.status === 403 || e.status === 404 || e.status === 429) {
+        this.ghUnwatch();
+        this.notice(e.message);
+      }
+      return;
+    }
+    if (!t) return;                                  // 304: nothing moved
+    await this.refreshWith(() => this.ghFetch(t));
+  }
+
+  // "Forget" is only meaningful once something is stored.
+  syncGhButtons() {
+    $("#ghForget").classList.toggle("hidden", !ghToken());
+  }
+
   async reload() {
-    if (this.state.dirHandle) {
+    if (this.state.source === "github") {
+      try {
+        const { texts, label } = await this.ghFetch(await ghTree());
+        this.ingest(texts, label);
+        return;
+      } catch (e) { this.err(e.message); }
+    } else if (this.state.dirHandle) {
       try {
         this.ingest(await this.readAll(this.state.dirHandle), this.state.label);
         return;
@@ -577,12 +805,12 @@ class App {
   /* Re-read after a change. Deliberately quieter than ↻: the scroll position
      is kept, and a failure is swallowed — reading mid-write throws or yields a
      truncated file, and the write that follows will bring us back. */
-  async refresh() {
-    if (!this.state.dirHandle) return;
+  async refreshWith(load) {          // load() -> { texts, label }
     const wrap = $("#tableWrap");
     const { scrollTop, scrollLeft } = wrap;
     try {
-      this.ingest(await this.readAll(this.state.dirHandle), this.state.label);
+      const { texts, label } = await load();
+      this.ingest(texts, label);
     } catch { return; }
     wrap.scrollTop = scrollTop;
     wrap.scrollLeft = scrollLeft;
@@ -593,6 +821,12 @@ class App {
     el.classList.remove("go");
     void el.offsetWidth;        // restart the fade if changes land back to back
     el.classList.add("go");
+  }
+
+  async refresh() {
+    if (!this.state.dirHandle) return;
+    return this.refreshWith(async () => (
+      { texts: await this.readAll(this.state.dirHandle), label: this.state.label }));
   }
 
   /* Hand the parsed CSVs to the tool, which returns the rows for each view. */
@@ -611,6 +845,7 @@ class App {
 
   showLanding() {
     this.unwatch();
+    this.ghUnwatch();
     $("#landing").classList.remove("hidden");
     $("#tableWrap").classList.add("hidden");
     $("#legend").classList.add("hidden");
@@ -1001,11 +1236,35 @@ class App {
     });
     $("#reloadBtn").addEventListener("click", () => this.reload());
     $("#live").addEventListener("animationend", e => { e.target.hidden = true; });
-    $("#folderBtn").addEventListener("click", () => { this.showLanding(); this.pickDirectory(); });
+    // Now that there's more than one source, this returns to the card and lets
+    // the card ask — rather than assuming a folder is what's wanted.
+    $("#folderBtn").addEventListener("click", () => this.showLanding());
     $("#pickDir").addEventListener("click", () => this.pickDirectory());
     $("#pickFiles").addEventListener("click", () => $("#fileInput").click());
     $("#dirInput").addEventListener("change", e => this.loadFromFileList(e.target.files));
     $("#fileInput").addEventListener("change", e => this.loadFromFileList(e.target.files));
+
+    $("#ghLoad").addEventListener("click", () => {
+      const v = $("#ghToken").value.trim();
+      if (v) { ghSetToken(v); this.syncGhButtons(); }
+      this.loadFromGitHub();
+    });
+    $("#ghToken").addEventListener("keydown", e => {
+      if (e.key === "Enter") $("#ghLoad").click();
+    });
+    $("#ghForget").addEventListener("click", () => {
+      ghSetToken("");
+      this.syncGhButtons();
+      $("#ghToken").value = "";
+      this.ghUnwatch();
+      if (this.state.source === "github") { this.state.source = ""; this.savePrefs(); }
+      this.showLanding();
+      this.err("Token forgotten.");
+    });
+    // A poll skipped while hidden shouldn't mean stale data on the way back.
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && this.state.source === "github") this.ghPoll();
+    });
     addEventListener("resize", () => this.setStickyWidth());
 
     document.addEventListener("keydown", e => {
