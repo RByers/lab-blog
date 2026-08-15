@@ -61,10 +61,15 @@ button { cursor: pointer; }
 
 /* ---------- top bar ---------- */
 header {
-  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  display: flex; flex-direction: column; gap: 8px;
   padding: 8px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
+}
+/* Two rows: identity and tabs on top, the filtering controls underneath, so
+   the tab strip keeps its place no matter how wide the search box gets. */
+header .row {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
 }
 h1 {
   font-size: 14px; font-weight: 650; margin: 0 4px 0 0; letter-spacing: -0.01em;
@@ -99,6 +104,10 @@ h1 small { font-weight: 400; color: var(--ink-dim); font-size: 11px; }
   padding: 4px 10px; border-radius: 6px; white-space: nowrap;
 }
 .btn:hover { background: var(--panel-2); }
+/* Kept in the layout rather than hidden when there is nothing to clear, so the
+   row doesn't reflow the moment a filter is applied or a tab changes. */
+.btn:disabled { color: var(--ink-dim); opacity: .55; cursor: default; }
+.btn:disabled:hover { background: var(--panel); }
 .btn.primary { background: var(--accent); border-color: transparent; color: light-dark(#fff, #10131a); font-weight: 600; }
 .btn[aria-expanded="true"] { background: var(--panel-2); border-color: var(--line-hard); }
 
@@ -336,23 +345,27 @@ table.stat td.blank { color: var(--ink-dim); }
 <body>
 
 <header>
-  <h1>MolBioLab <small id="src">no data</small>
-    <span id="live" hidden>updated</span></h1>
-  <div class="tabs" role="tablist">
-    <button role="tab" id="tab-samples" aria-selected="true">Samples</button>
-    <button role="tab" id="tab-pathogens" aria-selected="false">Pathogens</button>
-    <button role="tab" id="tab-species" aria-selected="false">Species</button>
-    <button role="tab" id="tab-primers" aria-selected="false">Primers</button>
-    <button role="tab" id="tab-reagents" aria-selected="false">Reagents</button>
-    <button role="tab" id="tab-stats" aria-selected="false">Stats</button>
+  <div class="row">
+    <h1>MolBioLab <small id="src">no data</small>
+      <span id="live" hidden>updated</span></h1>
+    <div class="tabs" role="tablist">
+      <button role="tab" id="tab-samples" aria-selected="true">Samples</button>
+      <button role="tab" id="tab-pathogens" aria-selected="false">Pathogens</button>
+      <button role="tab" id="tab-species" aria-selected="false">Species</button>
+      <button role="tab" id="tab-primers" aria-selected="false">Primers</button>
+      <button role="tab" id="tab-reagents" aria-selected="false">Reagents</button>
+      <button role="tab" id="tab-stats" aria-selected="false">Stats</button>
+    </div>
+    <div class="spacer"></div>
+    <span class="count" id="count"></span>
+    <button class="btn" id="reloadBtn" title="Re-read the CSVs from disk">↻</button>
+    <button class="btn" id="folderBtn">Folder…</button>
   </div>
-  <input class="search" id="q" type="search" placeholder="Search all columns…" autocomplete="off">
-  <button class="btn" id="colsBtn" popovertarget="colsMenu" aria-expanded="false">Columns</button>
-  <button class="btn hidden" id="clearBtn">Clear filters</button>
-  <div class="spacer"></div>
-  <span class="count" id="count"></span>
-  <button class="btn" id="reloadBtn" title="Re-read the CSVs from disk">↻</button>
-  <button class="btn" id="folderBtn">Folder…</button>
+  <div class="row" id="filterRow">
+    <input class="search" id="q" type="search" placeholder="Search all columns…" autocomplete="off">
+    <button class="btn" id="colsBtn" popovertarget="colsMenu" aria-expanded="false">Columns</button>
+    <button class="btn" id="clearBtn" disabled>Clear filters</button>
+  </div>
 </header>
 
 <div class="notice hidden" id="notice"></div>
@@ -1179,10 +1192,11 @@ function render() {
   $("#tableWrap").classList.toggle("hidden", isStats);
   $("#statsWrap").classList.toggle("hidden", !isStats);
   $("#legend").classList.toggle("hidden", isStats);
-  for (const el of [$("#q"), $("#colsBtn")]) el.classList.toggle("hidden", isStats);
+  // Stats has nothing to search, filter or hide columns in, so the whole
+  // control row goes away rather than sitting there inert.
+  $("#filterRow").classList.toggle("hidden", isStats);
   if (isStats) {
     $("#count").textContent = "";
-    $("#clearBtn").classList.add("hidden");
     renderStats();
     savePrefs();
     return;
@@ -1307,7 +1321,7 @@ function render() {
   const total = state.rows[v].length;
   $("#count").innerHTML = `<b>${shown}</b>${shown !== total ? ` / ${total}` : ""} rows`;
   const anyFilter = Object.keys(state.filters[v]).length || state.q;
-  $("#clearBtn").classList.toggle("hidden", !anyFilter);
+  $("#clearBtn").disabled = !anyFilter;
   renderLegend(rows);
   requestAnimationFrame(setStickyWidth);
   savePrefs();
