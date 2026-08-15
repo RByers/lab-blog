@@ -159,6 +159,10 @@ h1 a:hover { color: var(--accent); }
 }
 button.chip:hover { border-color: var(--line-hard); }
 button.chip[aria-pressed="true"] { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+/* a legend that filters rather than explains a colour: no swatch to promise one */
+.legend.plain .chip { padding-left: 9px; background: var(--panel-2); }
+.legend.plain .chip .sw { display: none; }
+.legend.plain .chip:hover { background: var(--panel); }
 .legend .sep { width: 1px; align-self: stretch; background: var(--line); margin: 0 4px; }
 .legend .note { color: var(--ink-dim); font-size: 11.5px; }
 /* the pale→dark ramp shown next to "darker = …", in the caller's hue */

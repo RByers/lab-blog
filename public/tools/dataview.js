@@ -394,6 +394,22 @@ function link(text, page, addr, title) {
   return a;
 }
 
+/* A link out of the repo, for a column whose text is the name of something
+   that lives on the web. The scheme is checked rather than linked blind —
+   href takes a javascript: URL just as happily as an http one, and this is
+   CSV text. Returns the plain text when there's no usable URL. */
+function extLink(text, url, title) {
+  if (!/^https?:\/\//i.test(url || "")) return document.createTextNode(text);
+  const a = document.createElement("a");
+  a.href = url;
+  a.textContent = text;
+  a.target = "_blank";
+  a.rel = "noopener noreferrer";
+  a.title = title || url;
+  a.addEventListener("click", e => e.stopPropagation());
+  return a;
+}
+
 /* ============================ page chrome ============================
    Built here rather than written out in each tool's HTML: it is the same
    header, legend, table and landing card every time, and two copies of it in
@@ -674,11 +690,14 @@ class App {
      the filter it produced: one row can name several species, so inferring it
      from the filter would light up every species named in a multi-value cell
      rather than the one that was clicked. */
+  /* null, not "", when nothing is pressed: a chip's key can legitimately be
+     the empty string — the reagents with no Category — and it has to be
+     distinguishable from "no chip". */
   chipKey(v = this.state.view) {
     const col = this.views[v]?.chipCol, spec = this.state.spec[v];
-    if (!col || !spec) return "";
+    if (!col || !spec) return null;
     const keys = Object.keys(spec);
-    return keys.length === 1 && keys[0] === col && spec[col].length === 1 ? spec[col][0] : "";
+    return keys.length === 1 && keys[0] === col && spec[col].length === 1 ? spec[col][0] : null;
   }
 
   /* ---- messages ---- */
@@ -1311,6 +1330,10 @@ class App {
     const spec = this.views[this.state.view].legend?.(rows, this);
     el.replaceChildren();
     el.classList.toggle("hidden", !spec);
+    // A legend is normally the key to the row colours. A `plain` one isn't —
+    // it's a set of values to filter by, for a view whose rows aren't coloured
+    // at all — so its chips drop the swatch that would promise a colour.
+    el.classList.toggle("plain", !!spec?.plain);
     if (!spec) return;
     const active = this.chipKey();
     if (spec.label) el.insertAdjacentHTML("beforeend", `<span class="lbl">${esc(spec.label)}</span>`);
@@ -1568,7 +1591,7 @@ function statTable(cols, rows) {
 
 return {
   App, T, DATA_FILES, TINTS,
-  link, hrefFor, buildHash, parseHash,
+  link, extLink, hrefFor, buildHash, parseHash,
   $, esc, parseCSV, toObjects,
   dnum, dateOnly, yearOf, labelKey, cmpLabel, cmpText, cmpNum, cmpDate,
   median, round,

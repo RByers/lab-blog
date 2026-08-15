@@ -12,7 +12,7 @@
 
 (() => {
 const { T, esc, dnum, dateOnly, cmpLabel, hasHue, hueOf, isWarm, statTable,
-        link, round } = Dataview;
+        link, extLink, round } = Dataview;
 
 // The other tool. Named once so a link to it is a link, not a string.
 const RESULTS = "results.html";
@@ -144,12 +144,20 @@ function describeNodes(row) {
     const at = piece.indexOf("@");
     const head = at < 0 ? piece : piece.slice(0, at);
     const tail = at < 0 ? "" : piece.slice(at);
-    const [, lead, core, trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(head);
+    const [, lead, whole, trail] = /^(\s*)([\s\S]*?)(\s*)$/.exec(head);
     if (lead) out.push(lead);
-    if (!core) { if (trail) out.push(trail); if (tail) out.push(tail); continue; }
-    // parentheses are an aside about the component, not part of its name
-    const name = core.replace(/\(.*?\)/g, " ").replace(/\s+/g, " ").trim();
-    if (target(name, ["primers", "reagents"])) {
+    if (!whole) { if (trail) out.push(trail); if (tail) out.push(tail); continue; }
+    /* Parentheses are an aside about the component — the mix's dilution
+       (`(6.67x, use 3µL)`), a note on what it's for (`(Endo Ctrl)`) — and the
+       comma inside one puts it in the middle of a segment. It is neither part
+       of the name nor part of what should be underlined. */
+    const cut = whole.indexOf("(");
+    const core = cut < 0 ? whole : whole.slice(0, cut).trimEnd();
+    const aside = cut < 0 ? "" : whole.slice(core.length);
+    const name = core.replace(/\s+/g, " ").trim();
+    if (!name) {
+      out.push(whole);
+    } else if (target(name, ["primers", "reagents"])) {
       out.push(nameLink(core, ["primers", "reagents"], "what this component is", name));
     } else if (first && target(row.Label, ["primers"])) {
       out.push(nameLink(core, ["primers"],
@@ -157,6 +165,7 @@ function describeNodes(row) {
     } else {
       out.push(core);
     }
+    if (aside) out.push(aside);
     first = false;
     if (trail) out.push(trail);
     if (tail) out.push(tail);
@@ -596,6 +605,13 @@ const views = {
           `Every qPCR assay prepared from the ${val} design`));
         return true;
       }
+      // The paper the design came from. citationURL is one-to-one with
+      // Citation across the file, so the URL needs no column of its own — it
+      // is what the citation text points at.
+      if (c.k === "Citation" && val) {
+        td.append(extLink(val, row.citationURL, `${val} — ${row.citationURL}`));
+        return true;
+      }
       return coloured.cell(td, c, row, val);
     },
   },
@@ -607,6 +623,31 @@ const views = {
     sort: { k: "Label", dir: 1 },
     // reagents are always grouped by what they are
     group: { of: r => r.Category || "", label: k => k || "(no category)" },
+    /* Category is the group heading, so it has no column of its own — which
+       left no way to say "just the primer tubes". These chips are that way:
+       the legend bar, filtering rather than explaining a colour, since a
+       reagent has no species to be tinted by. */
+    chipCol: "Category",
+    match: { Category: (cell, want) => cell === want },
+    legend(rows, app) {
+      const counts = new Map();
+      for (const r of app.state.rows.reagents) {
+        const k = r.Category || "";
+        counts.set(k, (counts.get(k) || 0) + 1);
+      }
+      if (counts.size < 2) return null;
+      return {
+        label: "Category",
+        plain: true,
+        // commonest first: the categories worth filtering to are the big ones
+        chips: [...counts.entries()]
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .map(([k, n]) => ({
+            key: k, count: n, label: k || "(none)",
+            title: `${n} tube${n > 1 ? "s" : ""} — click to filter`,
+          })),
+      };
+    },
     cols: [
       { k: "Label",    t: T.label },
       { k: "Lid",      t: T.flag, title: "Cap colour — how a tube is found in a box" },
