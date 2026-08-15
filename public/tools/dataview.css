@@ -1,7 +1,7 @@
-/* dataview.css — the chrome every tool in this folder shares: theme, header,
-   tab strip, notice bar, legend, table, popover menus, stats tables and the
-   landing card. Anything specific to one tool lives in that tool's own
-   stylesheet (inventory.css, results.css), which is loaded after this one. */
+/* dataview.css — the chrome the whole data tool shares: theme, header, tab
+   strip, notice bar, legend, table, popover menus, stats tables and the landing
+   card. Anything belonging to one block of tabs alone lives in data.css, which
+   is loaded after this one. */
 
 /* ---------- theme ---------- */
 :root {
@@ -88,15 +88,51 @@ h1 a:hover { color: var(--accent); }
   #live.go { animation-duration: 1.8s; animation-timing-function: step-end; }
 }
 
-.tabs { display: flex; background: var(--panel-2); border-radius: 7px; padding: 2px; }
+/* ---------- tab strip ----------
+   Two blocks, Inventory and Results, each its own pill: the group's name and
+   then its tabs. Given the room they are both open. When the header runs out of
+   width, the block you aren't in folds its tabs shut and leaves its name behind
+   as the way back — layoutTabs decides which, and sets the widths the fold
+   animates between. */
+.tabs { display: flex; gap: 8px; flex: none; }
+.tgrp {
+  display: flex; align-items: center; gap: 2px;
+  background: var(--panel-2); border-radius: 7px; padding: 2px;
+}
 .tabs button {
   border: 0; background: none; padding: 4px 12px; border-radius: 5px;
-  color: var(--ink-dim); font-weight: 550;
+  color: var(--ink-dim); font-weight: 550; flex: none; white-space: nowrap;
 }
 .tabs button[aria-selected="true"] {
   background: var(--panel); color: var(--ink);
   box-shadow: 0 1px 2px light-dark(rgb(0 0 0 / .18), rgb(0 0 0 / .5));
 }
+/* The block's name. A label while the block is open — quiet, and the ink of
+   the block you're in — and a button once it's folded. */
+.tabs .gname {
+  font-size: 11px; font-weight: 650; letter-spacing: .04em;
+  padding: 4px 8px; opacity: .8;
+}
+.tgrp.on .gname { color: var(--ink); opacity: 1; }
+.gname:hover { color: var(--accent); }
+.tabs .tgrp.closed .gname {
+  font-size: inherit; letter-spacing: 0; opacity: 1;
+  padding: 4px 12px; color: var(--ink-dim);
+}
+.tgrp.closed .gname:hover { background: var(--panel); color: var(--ink); }
+/* The fold itself. Width is set in px from the buttons' own widths, so there is
+   something for the transition to run between; overflow keeps them from
+   spilling out of the closing block. */
+.tabset {
+  display: flex; overflow: hidden;
+  transition: width .26s cubic-bezier(.4, 0, .2, 1), opacity .2s ease;
+}
+/* On a phone even one block can be wider than the window; its tabs scroll
+   rather than running off the edge. */
+.tgrp:not(.closed) .tabset { overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.tgrp.closed .tabset { opacity: 0; }
+.tabs.no-anim .tabset { transition: none; }
+@media (prefers-reduced-motion: reduce) { .tabset { transition: none; } }
 
 .btn {
   border: 1px solid var(--line-hard); background: var(--panel);

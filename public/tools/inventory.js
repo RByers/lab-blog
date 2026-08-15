@@ -1,21 +1,22 @@
-/* inventory.js — the lab inventory browser.
+/* inventory.js — the Inventory block of the data tool: what the lab has.
  *
  * Samples, pathogens, species, cDNA tubes, primer designs and reagents, one tab
  * each, plus a computed per-person sampling-coverage tab. Everything generic —
  * reading the folder, sorting, filtering, hiding columns, the legend bar, the
- * address bar — lives in dataview.js; what's here is what makes this tool the
+ * address bar — lives in dataview.js; what's here is what makes these tabs the
  * inventory: which columns each CSV shows, how samples join to pathogens, how
  * the cDNA ledger rolls up into tubes, how a row gets its colour, and the
  * cold-episode grouping.
+ *
+ * Its tab ids are `inv-`-prefixed, and results.js's `res-`, because the two
+ * blocks share one address space and both have a Samples and an Assays tab.
+ * Links across to the Results tabs are ordinary links: same page, other block.
  */
 "use strict";
 
 (() => {
 const { T, esc, dnum, dateOnly, cmpLabel, hasHue, hueOf, isWarm, statTable,
         link, extLink, round } = Dataview;
-
-// The other tool. Named once so a link to it is a link, not a string.
-const RESULTS = "results.html";
 
 /* ============================ derived state ============================
    Rebuilt from the CSVs on every ingest, and read by the view definitions
@@ -102,7 +103,7 @@ function target(name, order) {
     const [map, col] = TABLES[tab]();
     for (let i = words.length; i > 0; i--) {
       const hit = lookup(words.slice(0, i).join(" "), map);
-      if (hit) return { tab, spec: { [col]: [hit] } };
+      if (hit) return { tab: "inv-" + tab, spec: { [col]: [hit] } };
     }
   }
   return null;
@@ -112,7 +113,7 @@ function target(name, order) {
 // to nothing, so an unlinked name reads as exactly that.
 function nameLink(text, order, title, name = text) {
   const t = target(name, order);
-  return t ? link(text, "", { tab: t.tab, spec: t.spec },
+  return t ? link(text, { tab: t.tab, spec: t.spec },
     `${Object.values(t.spec)[0][0]} — ${title}`) : document.createTextNode(text);
 }
 
@@ -311,7 +312,7 @@ function speciesLegend(rows, app) {
   // to on the wheel, which is the adjacency the warm band exists to avoid
   const order = [...counts.entries()].sort((a, b) =>
     isWarm(a[0]) - isWarm(b[0]) || hueOf(a[0]) - hueOf(b[0]) || a[0].localeCompare(b[0]));
-  const noun = app.state.view === "samples" ? "sample" : "record";
+  const noun = app.state.view === "inv-samples" ? "sample" : "record";
 
   const notes = [];
   if (counts.size) notes.push({
@@ -358,7 +359,7 @@ const coloured = {
         const badge = document.createElement("span");
         badge.className = "badge";
         badge.append(lab.speciesSet.has(s)
-          ? link(s, "", { tab: "species", spec: { Species: [s] } }, `What ${s} is`)
+          ? link(s, { tab: "inv-species", spec: { Species: [s] } }, `What ${s} is`)
           : s);
         td.append(badge);
       }
@@ -370,7 +371,7 @@ const coloured = {
 
 /* ============================ views ============================ */
 const views = {
-  samples: {
+  "inv-samples": {
     label: "Samples",
     key: "Label",
     ...coloured,
@@ -422,7 +423,9 @@ const views = {
       // in cold order, a row followed by another swab from the same cold gets
       // a hairline instead of the full rule, and every swab of a multi-sample
       // cold gets a segment of the tie bar
-      if (!coldSort(app.state.sort.samples)) return;
+      // decorate() isn't handed the app, and this block no longer owns one of
+      // its own; the live app is on Dataview.
+      if (!coldSort(Dataview.app.state.sort["inv-samples"])) return;
       const c = lab.colds.get(r.Label);
       const same = j => { const o = rows[j]; return o && c && lab.colds.get(o.Label) === c; };
       const up = same(i - 1), down = same(i + 1);
@@ -433,7 +436,7 @@ const views = {
       // The three ways out of a sample row: its cDNA tubes (here), the qPCR
       // wells behind the call in Confirmed+, and the sequencing libraries.
       if (c.k === "Label" && lab.hasCdna.has(val)) {
-        td.append(link(val, "", { tab: "cdna", spec: { Sample: [val] } },
+        td.append(link(val, { tab: "inv-cdna", spec: { Sample: [val] } },
           `cDNA tubes made from ${val}`));
         return true;
       }
@@ -452,8 +455,7 @@ const views = {
           // the numbers stay plain text and ingest counts it.
           if (e.cq) {
             td.append(hasWell(row.Label, e.bare)
-              ? link(e.cq, RESULTS,
-                  { tab: "results", spec: { Sample: [row.Label], Primer: [e.bare] } },
+              ? link(e.cq, { tab: "res-results", spec: { Sample: [row.Label], Primer: [e.bare] } },
                   `The ${e.bare} wells on ${row.Label} these were read off`)
               : e.cq);
           }
@@ -461,7 +463,7 @@ const views = {
         return true;
       }
       if (c.k === "Seq" && val && lab.sequenced.has(row.Label)) {
-        td.append(link(val, RESULTS, { tab: "sequencing", spec: { Sample: [row.Label] } },
+        td.append(link(val, { tab: "res-sequencing", spec: { Sample: [row.Label] } },
           `The sequencing libraries made from ${row.Label}`));
         return true;
       }
@@ -475,7 +477,7 @@ const views = {
         box.className = val === row.Label ? "tick" : "badge";
         const text = val === row.Label ? "✓" : val;
         box.append(lab.hasPathogen.has(val)
-          ? link(text, "", { tab: "pathogens", spec: { Sample: [val] } },
+          ? link(text, { tab: "inv-pathogens", spec: { Sample: [val] } },
               `What was found in ${val}'s illness episode`)
           : text);
         td.append(box);
@@ -492,7 +494,7 @@ const views = {
     },
   },
 
-  pathogens: {
+  "inv-pathogens": {
     label: "Pathogens",
     key: "Sample",
     ...coloured,
@@ -520,7 +522,7 @@ const views = {
     ],
     cell(td, c, row, val) {
       if (c.k === "Sample" && val) {
-        td.append(link(val, "", { tab: "samples", spec: { Label: [val] } },
+        td.append(link(val, { tab: "inv-samples", spec: { Label: [val] } },
           `${val} in samples.csv`));
         return true;
       }
@@ -530,7 +532,7 @@ const views = {
         const runs = [...new Set(val.split(/[\s,;·]+/).filter(Boolean)
           .map(t => t.split("-")[0]))].filter(r => lab.runs.has(r));
         if (runs.length) {
-          td.append(link(val, RESULTS, { tab: "sequencing", spec: { Run: runs } },
+          td.append(link(val, { tab: "res-sequencing", spec: { Run: runs } },
             `The sequencing ${runs.length > 1 ? "runs" : "run"} behind this: ${runs.join(", ")}`));
           return true;
         }
@@ -539,7 +541,7 @@ const views = {
     },
   },
 
-  species: {
+  "inv-species": {
     label: "Species",
     key: "Species",
     ...coloured,
@@ -560,7 +562,7 @@ const views = {
     ],
     cell(td, c, row, val) {
       if (c.k === "Species" && val) {
-        td.append(link(val, "", { tab: "samples", spec: { Species: [val] } },
+        td.append(link(val, { tab: "inv-samples", spec: { Species: [val] } },
           `Samples this was found in`));
         return true;
       }
@@ -568,7 +570,7 @@ const views = {
     },
   },
 
-  primers: {
+  "inv-primers": {
     label: "Primers",
     key: "Label",
     ...coloured,
@@ -601,7 +603,7 @@ const views = {
       // A design's roll-up over there: how often it has come up positive, its
       // usual Cq, its contamination history — where it has ever been run.
       if (c.k === "Label" && val && namesAssay(lab.assayed, val)) {
-        td.append(link(val, RESULTS, { tab: "assays", spec: { Primer: [val] } },
+        td.append(link(val, { tab: "res-assays", spec: { Primer: [val] } },
           `Every qPCR assay prepared from the ${val} design`));
         return true;
       }
@@ -616,7 +618,7 @@ const views = {
     },
   },
 
-  reagents: {
+  "inv-reagents": {
     label: "Reagents",
     key: "Label",
     ...coloured,
@@ -631,7 +633,7 @@ const views = {
     match: { Category: (cell, want) => cell === want },
     legend(rows, app) {
       const counts = new Map();
-      for (const r of app.state.rows.reagents) {
+      for (const r of app.state.rows["inv-reagents"]) {
         const k = r.Category || "";
         counts.set(k, (counts.get(k) || 0) + 1);
       }
@@ -663,7 +665,7 @@ const views = {
       // qPCR names its assay as it was *prepared*, which is a reagent label —
       // so a primer tube here goes straight to the wells it was used in.
       if (c.k === "Label" && val && isOligo(row) && namesAssay(lab.assayed, val)) {
-        td.append(link(val, RESULTS, { tab: "results", spec: { Primer: [val] } },
+        td.append(link(val, { tab: "res-results", spec: { Primer: [val] } },
           `qPCR wells run with ${val}`));
         return true;
       }
@@ -681,7 +683,7 @@ const views = {
      reagents.csv (or, failing that, a design out of primers.csv), which is what
      makes this tab worth having as a tab — it's the index from the shorthand
      the notes use to the things on the bench. */
-  assays: {
+  "inv-assays": {
     label: "Assays",
     key: "Name",
     ...coloured,
@@ -718,7 +720,7 @@ const views = {
      this tab is, and the events behind a line are a twisty away. Nothing here
      stores a balance; `Left` is the sum of the tube's own rows, recomputed
      every ingest, which is the whole reason the file is shaped this way. */
-  cdna: {
+  "inv-cdna": {
     label: "cDNA",
     key: "Tube",
     ...coloured,
@@ -735,7 +737,7 @@ const views = {
       of: row => lab.events.get(row.Tube) || [],
       cell(td, c, ev, val) {
         if (c.k === "Experiment" && val && val !== "discarded") {
-          td.append(link(val, RESULTS, { tab: "results", spec: { Experiment: [val] } },
+          td.append(link(val, { tab: "res-results", spec: { Experiment: [val] } },
             "The qPCR wells run in this experiment"));
           return true;
         }
@@ -771,7 +773,7 @@ const views = {
         for (const s of val.split("+").map(x => x.trim()).filter(Boolean)) {
           if (td.childNodes.length) td.append("+");
           td.append(lab.samples.has(s)
-            ? link(s, "", { tab: "samples", spec: { Label: [s] } }, `${s} in samples.csv`)
+            ? link(s, { tab: "inv-samples", spec: { Label: [s] } }, `${s} in samples.csv`)
             : s);
         }
         return true;
@@ -880,7 +882,7 @@ function cdnaRows(events, samples) {
 const STAT_MIN = 5;      // sources with fewer samples than this fold into "Other"
 
 function renderStats(wrap, app) {
-  const samples = app.state.rows.samples;
+  const samples = app.state.rows["inv-samples"];
   const n = new Map();
   for (const r of samples) n.set(r.Source || "—", (n.get(r.Source || "—") || 0) + 1);
   const main = [...n.entries()].filter(([, c]) => c >= STAT_MIN)
@@ -1065,7 +1067,12 @@ function ingest(tables) {
     notices.push(`${count(noWells, "Confirmed+ call")} cite${noWells.size > 1 ? "" : "s"} `
       + `a Cq with no matching well in qPCR-results.csv: ${listOf(noWells)}`);
   }
-  return { rows, notice: notices.join("  ·  ") };
+  // The App keys rows by tab id, which is qualified with the block they belong
+  // to; in here they are just the files they came out of.
+  return {
+    rows: Object.fromEntries(Object.entries(rows).map(([k, v]) => ["inv-" + k, v])),
+    notice: notices.join("  ·  "),
+  };
 }
 
 // "3 assays" / "1 component", and the offenders behind it, commonest first
@@ -1076,19 +1083,13 @@ const listOf = (m, cap = 8) => {
     + (all.length > cap ? `, +${all.length - cap} more` : "");
 };
 
-const app = new Dataview.App({
-  title: "Inventory",
-  prefsKey: "molbiolab.inventory.v5",
+Dataview.group({
+  id: "inv",
+  label: "Inventory",
   required: ["samples.csv", "pathogens.csv"],
-  landing: "Pick the folder holding <code>samples.csv</code> and <code>pathogens.csv</code> "
-    + "(plus <code>primers.csv</code> for result colouring, and <code>species.csv</code> / "
-    + "<code>assays.csv</code> / <code>reagents.csv</code> / <code>cdna.csv</code> for those tabs) "
-    + "— the repo root or its "
-    + "<code>data/</code> folder both work. Nothing leaves this machine; the page only reads the files.",
   views,
-  tabs: [{ id: "stats", label: "Stats", render: renderStats }],
+  tabs: [{ id: "inv-stats", label: "Stats", render: renderStats }],
   ingest,
 });
-app.start();
 
 })();

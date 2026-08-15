@@ -1,4 +1,4 @@
-/* results.js — the results browser: what the lab's assays actually said.
+/* results.js — the Results block of the data tool: what the assays said.
  *
  * `data/qPCR-results.csv` is one row per well × channel, every legitimate run
  * this lab has done since June 2020, and `data/sequencing.csv` one row per
@@ -13,15 +13,16 @@
  * sample, and the sequencing libraries — plus a per-year summary. The generic
  * machinery (folder, sorting, filtering, columns, legend, the address bar) is
  * dataview.js; the same folder and the same species colours as the inventory.
+ *
+ * Tab ids are `res-`-prefixed against the inventory's `inv-`, since both blocks
+ * have a Samples and an Assays tab and they share one address space. A link
+ * into the Inventory tabs is an ordinary link: same page, other block.
  */
 "use strict";
 
 (() => {
 const { T, esc, dnum, dateOnly, yearOf, cmpLabel, cmpText, median, round,
         hasHue, hueOf, isWarm, statTable, link } = Dataview;
-
-// The other tool. Named once so a link to it is a link, not a string.
-const INVENTORY = "inventory.html";
 
 /* ============================ conventions ============================ */
 
@@ -192,8 +193,10 @@ const num = T.num;
 const cqCol = { cls: "num", cmp: cmpCq, cq: true };
 
 const views = {
-  results: {
-    label: "Results",
+  "res-results": {
+    // "qPCR" rather than "Results": the block is already called that, and the
+    // tab is the wells themselves — the other three are roll-ups of them.
+    label: "qPCR",
     key: "Sample",
     ...coloured,
     hi: isPositive,
@@ -279,7 +282,7 @@ const views = {
         // a pool is several samples, and each one has its own row over there
         for (const s of pool(val)) {
           if (td.childNodes.length) td.append("+");
-          td.append(link(s, INVENTORY, { tab: "samples", spec: { Label: [s] } },
+          td.append(link(s, { tab: "inv-samples", spec: { Label: [s] } },
             `${s} in samples.csv`));
         }
         return true;
@@ -287,7 +290,7 @@ const views = {
       if (c.k === "Primer" && val) {
         for (const p of parts(val)) {
           if (td.childNodes.length) td.append(" + ");
-          td.append(link(p, "", { tab: "assays", spec: { Primer: [p] } },
+          td.append(link(p, { tab: "res-assays", spec: { Primer: [p] } },
             `Everything ${p} has ever been run on`));
         }
         return true;
@@ -296,7 +299,7 @@ const views = {
     },
   },
 
-  assays: {
+  "res-assays": {
     label: "Assays",
     key: "Primer",
     ...coloured,
@@ -325,7 +328,7 @@ const views = {
     ],
     cell(td, c, row, val) {
       if (c.k === "Primer" && val) {
-        td.append(link(val, "", { tab: "results", spec: { Primer: [val] } },
+        td.append(link(val, { tab: "res-results", spec: { Primer: [val] } },
           `The ${row.Wells} wells behind this row`));
         return true;
       }
@@ -333,7 +336,7 @@ const views = {
     },
   },
 
-  samples: {
+  "res-samples": {
     label: "Samples",
     key: "Sample",
     ...coloured,
@@ -358,17 +361,17 @@ const views = {
     ],
     cell(td, c, row, val) {
       if (c.k === "Sample" && val) {
-        td.append(link(val, "", { tab: "results", spec: { Sample: [val] } },
+        td.append(link(val, { tab: "res-results", spec: { Sample: [val] } },
           `The ${row.Wells} wells behind this row`));
         return true;
       }
       if (c.k === "Source" && val) {
-        td.append(link(val, INVENTORY, { tab: "samples", spec: { Source: [val] } },
+        td.append(link(val, { tab: "inv-samples", spec: { Source: [val] } },
           `Every sample from ${val}`));
         return true;
       }
       if (c.k === "Seq" && val) {
-        td.append(link(val, "", { tab: "sequencing", spec: { Sample: [row.Sample] } },
+        td.append(link(val, { tab: "res-sequencing", spec: { Sample: [row.Sample] } },
           `The libraries made from ${row.Sample}`));
         return true;
       }
@@ -382,7 +385,7 @@ const views = {
      resolved nothing, and a file of only the successes would answer "what did
      we find?" but never "what does it cost to find it?". So the default view is
      every library, gathered into its run, with the verdict on each. */
-  sequencing: {
+  "res-sequencing": {
     label: "Sequencing",
     key: "Sample",
     ...coloured,
@@ -440,7 +443,7 @@ const views = {
       if (c.k === "Sample" && val) {
         for (const s of pool(val)) {
           if (td.childNodes.length) td.append("+");
-          td.append(link(s, INVENTORY, { tab: "samples", spec: { Label: [s] } },
+          td.append(link(s, { tab: "inv-samples", spec: { Label: [s] } },
             `${s} in samples.csv`));
         }
         return true;
@@ -449,7 +452,7 @@ const views = {
       // the ledger says what was left of it afterwards. An amplicon tube isn't
       // tracked as inventory anywhere, so it stays plain text.
       if (c.k === "Tube" && val && lab.tubes.has(val)) {
-        td.append(link(val, INVENTORY, { tab: "cdna", spec: { Tube: [val] } },
+        td.append(link(val, { tab: "inv-cdna", spec: { Tube: [val] } },
           `${val} in the cDNA ledger`));
         return true;
       }
@@ -571,7 +574,7 @@ function ampliconSpecies(amplicon) {
 
 /* ============================ stats ============================ */
 function renderStats(wrap, app) {
-  const results = app.state.rows.results;
+  const results = app.state.rows["res-results"];
   const years = uniq(results.map(r => yearOf(r.Date)).filter(Boolean))
     .sort((a, b) => b - a).map(String);
   const cols = ["Total", ...years];
@@ -673,29 +676,26 @@ function ingest(tables) {
       + `don't resolve against primers.csv — panels and pools mostly: ${list}`;
   }
 
+  // The App keys rows by tab id, which is qualified with the block they belong
+  // to; in here they are just the tables they were built from.
   return {
     rows: {
-      results: results.rows,
-      assays: assayRows(results.rows),
-      samples: sampleRows(results.rows),
-      sequencing,
+      "res-results": results.rows,
+      "res-assays": assayRows(results.rows),
+      "res-samples": sampleRows(results.rows),
+      "res-sequencing": sequencing,
     },
     notice,
   };
 }
 
-const app = new Dataview.App({
-  title: "Results",
-  prefsKey: "molbiolab.results.v1",
+Dataview.group({
+  id: "res",
+  label: "Results",
   required: ["qPCR-results.csv"],
-  landing: "Pick the folder holding <code>qPCR-results.csv</code> (plus <code>sequencing.csv</code> "
-    + "for that tab, <code>primers.csv</code> for the assay targets and <code>samples.csv</code> for "
-    + "who each sample came from) — the repo root or its <code>data/</code> folder both work. "
-    + "Nothing leaves this machine; the page only reads the files.",
   views,
-  tabs: [{ id: "stats", label: "Stats", render: renderStats }],
+  tabs: [{ id: "res-stats", label: "Stats", render: renderStats }],
   ingest,
 });
-app.start();
 
 })();

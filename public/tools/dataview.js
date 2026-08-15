@@ -1,13 +1,18 @@
-/* dataview.js — the machinery behind the tools in this folder.
+/* dataview.js — the machinery behind the data tool in this folder.
  *
- * Every tool here is the same shape: point it at the MolBioLab data folder,
- * get a set of tabs, each a sortable / filterable / column-hideable table over
- * one of the CSVs. This file is all of that — reading the folder (and watching
- * it), remembering what you had open, drawing the table, the filter and column
- * menus, the legend, the address bar, the landing card. A tool (inventory.js,
- * results.js) supplies
- * only what is specific to it: which columns exist, how rows are coloured, and
- * whatever derived tabs it wants.
+ * The tool is one shape repeated: point it at the MolBioLab data folder, get a
+ * set of tabs, each a sortable / filterable / column-hideable table over one of
+ * the CSVs. This file is all of that — reading the folder (and watching it),
+ * remembering what you had open, drawing the table, the filter and column
+ * menus, the legend, the address bar, the landing card. A group (inventory.js,
+ * results.js) supplies only what is specific to it: which columns exist, how
+ * rows are coloured, and whatever derived tabs it wants.
+ *
+ * The tabs come in blocks — Inventory and Results — one per group, assembled by
+ * data.js. Tab ids are unique across the whole tool (`inv-samples`,
+ * `res-samples`), because they are what the address bar names and what one
+ * tab's links point at, and a link crosses a block boundary as freely as it
+ * stays inside one.
  *
  * Loaded as a classic script rather than a module on purpose: these pages are
  * meant to still work when opened straight off disk as file://, where module
@@ -335,13 +340,13 @@ async function ghBlob(sha) {
 function ghLabel(sha) { return `${GH_REPO.split("/")[1]}@${sha.slice(0, 7)}`; }
 
 /* ===================== the address bar =====================
-   A tool's URL hash says which tab you're looking at and what it's filtered to,
-   so a view can be linked to — from another tab, from the other tool, or from
-   outside either of them:
+   The URL hash says which tab you're looking at and what it's filtered to, so a
+   view can be linked to — from another tab, from the other block of tabs, or
+   from outside the tool altogether:
 
-     inventory.html#tab=samples&Species=HRV-A
-     results.html#tab=results&Sample=S90
-     inventory.html#tab=cdna&Tube=S183+cD
+     data.html#tab=inv-samples&Species=HRV-A
+     data.html#tab=res-results&Sample=S90
+     data.html#tab=inv-cdna&Tube=S183+cD
 
    `tab` and `q` (the search box) are reserved; every other parameter is a
    column name, repeated for several allowed values.
@@ -379,15 +384,16 @@ function buildHash({ tab = "", q = "", spec = {} } = {}) {
   return s ? "#" + s : "";
 }
 
-// An address as an href. `page` is "" for another tab of this same tool.
-const hrefFor = (page, addr) => (page || "") + buildHash(addr);
+// An address as an href. Every tab lives on this one page, so an address is
+// never anything but a hash.
+const hrefFor = addr => buildHash(addr);
 
 /* A cell that is also a way in to somewhere else. The click is stopped from
    bubbling because the clip-to-expand handler sits on the cell itself, and one
    click should do one thing. */
-function link(text, page, addr, title) {
+function link(text, addr, title) {
   const a = document.createElement("a");
-  a.href = hrefFor(page, addr);
+  a.href = hrefFor(addr);
   a.textContent = text;
   if (title) a.title = title;
   a.addEventListener("click", e => e.stopPropagation());
@@ -411,24 +417,34 @@ function extLink(text, url, title) {
 }
 
 /* ============================ page chrome ============================
-   Built here rather than written out in each tool's HTML: it is the same
-   header, legend, table and landing card every time, and two copies of it in
-   two files would drift. Each tool's .html is then just the two stylesheets,
-   the two scripts and a title. */
+   Built here rather than written out in the HTML, which is then just the
+   stylesheet, the scripts and a title — everything on the page depends on what
+   the groups declare, so there is nothing static worth writing twice. */
 const FAVICON = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cg fill='none' stroke='%23262b31' stroke-width='2' stroke-linejoin='round'%3E%3Crect x='4' y='3' width='19' height='26' rx='2.5' fill='%23fbf9f2'/%3E%3Cpath d='M9.5 3v26'/%3E%3C/g%3E%3Cg stroke='%23a8b0b9' stroke-width='1.7' stroke-linecap='round'%3E%3Cpath d='M13 9.5h6'/%3E%3Cpath d='M13 13.5h6'/%3E%3C/g%3E%3Cpath d='M19.5 16.5v5L15.6 27.8A1.7 1.7 0 0 0 17 30.4h8.6a1.7 1.7 0 0 0 1.4-2.6L23.1 21.5v-5z' fill='%2334c26b' stroke='%23262b31' stroke-width='2' stroke-linejoin='round'/%3E%3Cpath d='M18 16.5h6.6' stroke='%23262b31' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E";
 
 const FUNNEL_SVG = '<svg viewBox="0 0 12 12"><path d="M1.5 3h9M3 6h6M4.75 9h2.5"/></svg>';
+
+/* One block per group: the group's name, then its tabs. The name is a button
+   even when the block is open, because that is what it becomes when the window
+   is too narrow to hold both blocks — see layoutTabs. */
+function tabBlock(g, tabs) {
+  return `<div class="tgrp" id="grp-${g.id}">
+    <button class="gname" id="gbtn-${g.id}">${esc(g.label)}</button>
+    <div class="tabset" id="set-${g.id}">${tabs.filter(t => t.group === g.id).map(t =>
+      `<button role="tab" id="tab-${t.id}" aria-selected="false">${esc(t.label)}</button>`).join("")}</div>
+  </div>`;
+}
 
 function buildChrome(cfg, tabs) {
   document.head.insertAdjacentHTML("beforeend",
     `<link rel="icon" href="${FAVICON}">`);
   document.body.insertAdjacentHTML("afterbegin", `
 <header>
-  <div class="row">
+  <div class="row" id="topRow">
     <h1><a href="./" title="All lab tools">MolBioLab</a> ${esc(cfg.title)}
       <small id="src">no data</small><span id="live" hidden>updated</span></h1>
-    <div class="tabs" role="tablist">${tabs.map(t =>
-      `<button role="tab" id="tab-${t.id}" aria-selected="false">${esc(t.label)}</button>`).join("")}</div>
+    <div class="tabs no-anim" role="tablist">${
+      cfg.groups.map(g => tabBlock(g, tabs)).join("")}</div>
     <div class="spacer"></div>
     <span class="count" id="count"></span>
     <button class="btn" id="reloadBtn" title="Re-read the data">↻</button>
@@ -492,13 +508,19 @@ ${tabs.filter(t => t.render).map(t =>
 class App {
   constructor(cfg) {
     this.cfg = cfg;
-    this.views = cfg.views;
-    this.names = Object.keys(cfg.views);
-    // the tab strip: every data view, then whatever computed tabs the tool adds
-    this.tabs = [
-      ...this.names.map(id => ({ id, label: cfg.views[id].label || id })),
-      ...(cfg.tabs || []),
-    ];
+    this.groups = cfg.groups;
+    // The groups are separate only in the tab strip and in what builds them:
+    // below this line there is one set of views, one set of rows and one
+    // address space, and a link doesn't know or care which block it lands in.
+    this.views = Object.assign({}, ...this.groups.map(g => g.views));
+    this.names = Object.keys(this.views);
+    // one block per group: its data views, then whatever computed tabs it adds
+    this.tabs = this.groups.flatMap(g => [
+      ...Object.keys(g.views).map(id => ({ id, group: g.id, label: g.views[id].label || id })),
+      ...(g.tabs || []).map(t => ({ ...t, group: g.id })),
+    ]);
+    // a file any group can't work without is a file the tool can't work without
+    this.required = [...new Set(this.groups.flatMap(g => g.required || []))];
     this.observer = null;
     this.watchTimer = 0;
     // The remote folder as of the last read: its ETag, its blob shas and the
@@ -513,7 +535,11 @@ class App {
     this.pending = null;
 
     const state = this.state = {
-      view: this.names[0],
+      view: this.tabs[0].id,
+      // the tab each block was last left on, so a collapsed block reopens where
+      // you left it rather than back at its first tab
+      lastTab: Object.fromEntries(this.groups.map(g =>
+        [g.id, this.tabs.find(t => t.group === g.id).id])),
       label: "",             // the folder name shown in the header
       rows: {},              // view -> row objects
       q: "",
@@ -555,6 +581,13 @@ class App {
         + "is watched, so edits normally appear on their own";
     }
     this.showLanding();
+    // Lay the tabs out before the first paint, and only then let the strip
+    // animate — a block that arrives already folded shouldn't fold on screen.
+    // Widths measured this early can still be wrong (a web font arriving, a
+    // scrollbar appearing), so the header is watched rather than measured once.
+    this.layoutTabs();
+    new ResizeObserver(() => this.layoutTabs()).observe($("#topRow"));
+    requestAnimationFrame(() => $(".tabs").classList.remove("no-anim"));
     if (!window.showDirectoryPicker) this.noteFallback();
     this.syncGhButtons();
     $("#ghToken").value = ghToken();
@@ -580,8 +613,8 @@ class App {
           Object.entries(s.filters[v]).map(([k, set]) => [k, [...set]]));
       }
       localStorage.setItem(this.cfg.prefsKey, JSON.stringify(
-        { view: s.view, sort: s.sort, hidden, filters, collapsed, expanded,
-          spec: s.spec, q: s.q, source: s.source }));
+        { view: s.view, lastTab: s.lastTab, sort: s.sort, hidden, filters,
+          collapsed, expanded, spec: s.spec, q: s.q, source: s.source }));
     } catch {}
   }
 
@@ -591,6 +624,11 @@ class App {
       const p = JSON.parse(localStorage.getItem(this.cfg.prefsKey) || "null");
       if (!p) return;
       if (this.tabs.some(t => t.id === p.view)) s.view = p.view;
+      for (const g of this.groups) {
+        const t = p.lastTab?.[g.id];
+        if (this.tabs.some(x => x.id === t && x.group === g.id)) s.lastTab[g.id] = t;
+      }
+      s.lastTab[this.groupOf(s.view)] = s.view;
       if (p.sort) for (const v of this.names) if (p.sort[v]) s.sort[v] = p.sort[v];
       if (p.hidden) for (const v of this.names)
         if (Array.isArray(p.hidden[v])) s.hidden[v] = new Set(p.hidden[v]);
@@ -726,7 +764,7 @@ class App {
     for (const n of DATA_FILES) {
       try { texts[n] = await (await (await base.getFileHandle(n)).getFile()).text(); } catch {}
     }
-    const missing = this.cfg.required.filter(n => texts[n] === undefined);
+    const missing = this.required.filter(n => texts[n] === undefined);
     if (missing.length) {
       const e = new Error("That folder has no " + missing.join(" / ") + ".");
       e.name = "NotFoundError";
@@ -740,7 +778,7 @@ class App {
     // allow picking either the repo root or the data/ folder
     const names = new Set();
     for await (const [n, h] of dir.entries()) if (h.kind === "file") names.add(n.toLowerCase());
-    if (!this.cfg.required.every(n => names.has(n.toLowerCase()))) {
+    if (!this.required.every(n => names.has(n.toLowerCase()))) {
       try { base = await dir.getDirectoryHandle("data"); } catch { /* readAll reports it */ }
     }
     const texts = await this.readAll(base);
@@ -762,7 +800,7 @@ class App {
       const n = wanted.get(f.name.toLowerCase());
       if (n) { picked[n] = f; label = (f.webkitRelativePath || f.name).split("/")[0] || "files"; }
     }
-    const missing = this.cfg.required.filter(n => !picked[n]);
+    const missing = this.required.filter(n => !picked[n]);
     if (missing.length) {
       this.err("Couldn't find " + missing.join(" and ") + " in what you picked.");
       return Promise.resolve();
@@ -814,7 +852,7 @@ class App {
         texts[n] = await ghBlob(shas.get(n));
       }
     }));
-    const missing = this.cfg.required.filter(n => texts[n] === undefined);
+    const missing = this.required.filter(n => texts[n] === undefined);
     if (missing.length) {
       throw new Error(`${GH_REPO}/${GH_DIR} has no ` + missing.join(" / ") + ".");
     }
@@ -1003,13 +1041,23 @@ class App {
       { texts: await this.readAll(this.state.dirHandle), label: this.state.label }));
   }
 
-  /* Hand the parsed CSVs to the tool, which returns the rows for each view. */
+  /* Hand the parsed CSVs to each group, which returns the rows for its own
+     views. They read the same tables — the inventory colours a sample by what
+     the results found in it, the results name the person a sample came from —
+     so every group is handed all of them, and takes what it needs. */
   ingest(texts, label) {
     this.err("");
     const tables = {};
     for (const [name, text] of Object.entries(texts)) tables[name] = toObjects(text);
-    const { rows, notice } = this.cfg.ingest(tables, this);
-    for (const v of this.names) this.state.rows[v] = rows[v] || [];
+    const notices = [];
+    for (const g of this.groups) {
+      const { rows, notice } = g.ingest(tables, this);
+      for (const v of Object.keys(g.views)) this.state.rows[v] = rows[v] || [];
+      if (notice) notices.push(notice);
+    }
+    // Both blocks can have something to say about the same folder — the same
+    // separator they use between their own notes keeps that one bar readable.
+    const notice = notices.join("  ·  ");
     // The address that arrived before the data did, now that there are rows to
     // resolve it against.
     if (this.pending) {
@@ -1085,11 +1133,81 @@ class App {
     return rows;
   }
 
+  /* ============================ the tab strip ============================
+     Two blocks, one per group, and only one of them is ever being used. Given
+     the room they both stay open; short of it, the block you aren't in folds
+     down to its name, which is then the button that brings it back — and folds
+     the other one away in its place. */
+  groupOf(view = this.state.view) {
+    return this.tabs.find(t => t.id === view)?.group;
+  }
+
+  selectTab(id) {
+    this.state.view = id;
+    this.render();
+  }
+
+  // The width of a block's tabs laid out end to end. Read off the buttons
+  // rather than off the strip they're in, because a closed strip is clipped to
+  // nothing while its buttons keep the widths they'd have open — which is what
+  // makes this answer the same question whichever state we're in, and so what
+  // keeps the two states from chasing each other.
+  setWidth(set) {
+    const gap = parseFloat(getComputedStyle(set).columnGap) || 0;
+    return [...set.children].reduce((w, el) => w + el.offsetWidth, 0)
+      + gap * Math.max(0, set.children.length - 1);
+  }
+
+  layoutTabs() {
+    const row = $("#topRow"), tabs = $(".tabs");
+    const rowGap = parseFloat(getComputedStyle(row).columnGap) || 0;
+    const tabsGap = parseFloat(getComputedStyle(tabs).columnGap) || 0;
+    // What the header needs if both blocks are open: everything that isn't the
+    // tabs or the elastic spacer, at its own width, plus the blocks at theirs.
+    let need = rowGap * (row.children.length - 1);
+    for (const el of row.children)
+      if (el !== tabs && !el.classList.contains("spacer")) need += el.offsetWidth;
+    const widths = this.groups.map(g => {
+      const set = $("#set-" + g.id);
+      return { g, set, w: this.setWidth(set) };
+    });
+    need += tabsGap * (this.groups.length - 1);
+    for (const { g, set, w } of widths)
+      need += $("#grp-" + g.id).offsetWidth - set.offsetWidth + w;
+
+    const active = this.groupOf();
+    // A few pixels of slack: without it a block can reopen into exactly the
+    // space it needs, which is a fold away from being too tight again.
+    const narrow = need > row.clientWidth - 12;
+    // Everything in the strip that isn't tabs — the two names, the pills'
+    // padding, the gap between them. What's left is what the open block has to
+    // live in when even one block is more than the window can hold; past that
+    // its tabs scroll, which still beats running off the edge of the screen.
+    const chrome = tabsGap * (this.groups.length - 1)
+      + widths.reduce((n, { g, set }) => n + $("#grp-" + g.id).offsetWidth - set.offsetWidth, 0);
+    const room = Math.max(60, row.clientWidth - chrome);
+
+    for (const { g, set, w } of widths) {
+      const open = !narrow || g.id === active;
+      const grp = $("#grp-" + g.id);
+      grp.classList.toggle("closed", !open);
+      grp.classList.toggle("on", g.id === active);
+      set.style.width = (open ? Math.min(w, room) : 0) + "px";
+      set.inert = !open;                 // nothing to tab into behind the fold
+      $("#gbtn-" + g.id).title = open
+        ? `${g.label} tabs` : `Show the ${g.label} tabs`;
+    }
+  }
+
   /* ============================ render ============================ */
   render() {
     const s = this.state;
+    // Recorded here rather than where a tab is clicked, because a tab is also
+    // arrived at by following a link and by the Back button.
+    s.lastTab[this.groupOf()] = s.view;
     for (const t of this.tabs)
       $("#tab-" + t.id).setAttribute("aria-selected", s.view === t.id);
+    this.layoutTabs();
     const tab = this.tabs.find(t => t.id === s.view);
     const computed = !!tab?.render;
     $("#tableWrap").classList.toggle("hidden", computed);
@@ -1470,7 +1588,12 @@ class App {
       $("#colsBtn").setAttribute("aria-expanded", e.newState === "open");
     });
     for (const t of this.tabs)
-      $("#tab-" + t.id).addEventListener("click", () => { this.state.view = t.id; this.render(); });
+      $("#tab-" + t.id).addEventListener("click", () => this.selectTab(t.id));
+    // A block's name takes you into that block, at the tab you were last on in
+    // it. That is what the button is for when the block is folded shut, and it
+    // does no harm when it's open.
+    for (const g of this.groups)
+      $("#gbtn-" + g.id).addEventListener("click", () => this.selectTab(this.state.lastTab[g.id]));
     $("#q").addEventListener("input", e => { this.state.q = e.target.value; this.render(); });
     $("#clearBtn").addEventListener("click", () => {
       const v = this.state.view;
@@ -1523,7 +1646,7 @@ class App {
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden && this.state.source === "github") this.ghPoll();
     });
-    addEventListener("resize", () => this.setStickyWidth());
+    addEventListener("resize", () => this.setStickyWidth());   // tabs: see the observer in start()
 
     document.addEventListener("keydown", e => {
       if (e.key === "/" && e.target === document.body) { e.preventDefault(); $("#q").focus(); }
@@ -1589,8 +1712,15 @@ function statTable(cols, rows) {
   return t;
 }
 
+/* The blocks of tabs, in the order they were loaded: inventory.js and
+   results.js each declare one as they run, and data.js hands the lot to the
+   App. A group is { id, label, views, tabs, required, ingest } — the same
+   config the App used to take whole, now one per block. */
+const groups = [];
+const group = g => { groups.push(g); return g; };
+
 return {
-  App, T, DATA_FILES, TINTS,
+  App, T, DATA_FILES, TINTS, groups, group,
   link, extLink, hrefFor, buildHash, parseHash,
   $, esc, parseCSV, toObjects,
   dnum, dateOnly, yearOf, labelKey, cmpLabel, cmpText, cmpNum, cmpDate,

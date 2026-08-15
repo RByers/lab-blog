@@ -3,16 +3,18 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MolBioLab — Results</title>
+<title>MolBioLab — Data</title>
 <!-- The page is built by the scripts; the body starts empty on purpose, so the
-     header, table and landing card can't drift between the tools that share
-     them. dataview.* is the shared machinery, results.* only what is this
-     tool's own. -->
+     header, table and landing card can't drift from what the code expects.
+     dataview.* is the machinery, inventory.js / results.js are the two blocks of
+     tabs, data.js puts them together and starts it. -->
 <link rel="stylesheet" href="dataview.css">
-<link rel="stylesheet" href="results.css">
+<link rel="stylesheet" href="data.css">
 </head>
 <body>
 <script src="dataview.js"></script>
+<script src="inventory.js"></script>
 <script src="results.js"></script>
+<script src="data.js"></script>
 </body>
 </html>
