@@ -1,0 +1,32 @@
+/* qpcr.css — what belongs to the qPCR viewer alone. Everything else (the
+   theme, the header, the table, the menus) comes from dataview.css. */
+
+/* Determination is the file's most important column and the only one expected
+   to change over time, so it gets a colour rather than sitting as plain text.
+   Deliberately unlike the row tint, which is the *target* of the assay: these
+   are neutral greens and reds carrying no hue meaning, so a positive reads as
+   a positive on a row of any colour. */
+.badge.det { background: light-dark(#00000012, #ffffff18); }
+.badge.det[data-det="Positive"], .badge.det[data-det="Likelypositive"] {
+  background: light-dark(#c9f0d3, #1d4a2c);
+  color: light-dark(#0d4a20, #a8e6bb);
+}
+.badge.det[data-det="Contamination"] {
+  background: light-dark(#fbd5cf, #4d211a);
+  color: light-dark(#8a2418, #ffb3a7);
+}
+.badge.det[data-det="Inconclusive"], .badge.det[data-det="Unknown"] {
+  background: light-dark(#fdeac2, #4a3a12);
+  color: light-dark(#6b4c00, #f2d79a);
+}
+.badge.det[data-det="Failed"] { text-decoration: line-through; opacity: .8; }
+
+/* Cq, ∆RFU and the melt columns are read as a group, one well against the
+   next, so they hold a fixed width instead of shrinking to their contents. */
+td.num { min-width: 4.5rem; }
+
+/* A pooled sample (`S46+S53+S84+…`) is four times the width of an ordinary
+   label, and Sample is the sticky column — one such row would otherwise set
+   the width of the column on every screen. */
+td.sample { max-width: 9rem; }
+td.sample.open { max-width: 26rem; white-space: normal; }

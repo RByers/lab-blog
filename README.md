@@ -27,16 +27,30 @@ Any static assets, like images, can be placed in the `public/` directory.
 ## 🔬 Tools
 
 `public/tools/` holds standalone browser tools, listed at
-[lab.rbyers.ca/tools/](https://lab.rbyers.ca/tools/). They're plain
-single-file HTML — no build step, no server, no data uploaded anywhere.
+[lab.rbyers.ca/tools/](https://lab.rbyers.ca/tools/). They're plain HTML, CSS
+and JavaScript — no build step, no framework, no server, and no data uploaded
+anywhere. Both tools read the same folder of MolBioLab CSVs, which you pick
+once: the chosen folder is remembered, and shared between them.
 
 - **[Inventory](https://lab.rbyers.ca/tools/inventory.html)**
-  (`public/tools/inventory.html`) — reads the MolBioLab CSVs (`samples.csv`,
-  `pathogens.csv`, `species.csv`, `primers.csv`, `reagents.csv`) from a local
-  folder you pick and shows samples, pathogens, primer designs and reagents in
-  a sortable, filterable table, plus per-person sampling coverage stats. It
-  watches the folder, so edits to a CSV show up on their own. The data lives in
-  a private repository, so the tool isn't much use without it.
+  (`inventory.html`) — samples, pathogens, species, primer designs and
+  reagents, one tab each, plus per-person sampling-coverage stats. Sample rows
+  are tinted by the species found in them, darker once sequenced, and swabs
+  from one illness episode are banded together.
+- **[qPCR results](https://lab.rbyers.ca/tools/qpcr.html)** (`qpcr.html`) —
+  every well × channel in `qPCR-results.csv`, gathered into runs and tinted by
+  what the assay targets (darker = positive), plus roll-ups per assay (how
+  often it comes up positive, its usual and best Cq, its contamination
+  history) and per sample (everything ever run against one swab), and a
+  per-year summary.
+
+Both watch the folder, so edits to a CSV show up on their own. The data lives
+in a private repository, so the tools aren't much use without it.
+
+The shared machinery — reading and watching the folder, sorting, filtering,
+hiding columns, the legend, the page chrome — is `dataview.js` / `dataview.css`,
+and each tool adds only its own `.js` and `.css`. A tool's `.html` is just the
+title and those four files.
 
 ## 🧞 Commands
 

@@ -1,0 +1,18 @@
+/* inventory.css — what belongs to the inventory alone. Everything else (the
+   theme, the header, the table, the menus) comes from dataview.css. */
+
+/* cold-episode grouping: hairlines inside an episode, hard lines between, and
+   a bar down the far left tying an episode's swabs together. The bar stops
+   short of the first and last row's edges so a group reads as one run. */
+tbody.cold td { border-bottom-color: var(--line-hard); }
+tbody.cold tr[data-samecold] td { border-bottom-color: light-dark(#0000000d, #ffffff0a); }
+tbody.cold td:first-child { padding-left: 15px; }
+tbody.cold tr[data-cold] td:first-child::before {
+  content: ""; position: absolute; left: 6px; width: 3px; top: 0; bottom: -1px;
+  background: light-dark(#00000038, #ffffff40);
+}
+tbody.cold tr[data-cold="first"] td:first-child::before { top: 9px; border-radius: 2px 2px 0 0; }
+tbody.cold tr[data-cold="last"] td:first-child::before { bottom: 9px; border-radius: 0 0 2px 2px; }
+
+/* high subjective probability of a real infection, but nothing ever found */
+td.unexplained { color: light-dark(#b3261e, #ff9a90); font-weight: 700; }
