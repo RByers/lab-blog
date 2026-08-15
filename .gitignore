@@ -25,3 +25,7 @@ pnpm-debug.log*
 
 # chrome debugging profile
 .chromeprofile
+
+# Agent work files
+.claude/*
+!.claude/skills
