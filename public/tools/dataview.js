@@ -266,7 +266,7 @@ async function idbGet() {
 const GH_REPO = "RByers/MolBioLab";
 const GH_DIR = "data";
 const GH_TOKEN_LS = "molbiolab.gh.token";
-const GH_POLL_MS = 60_000;
+const GH_POLL_MS = 5_000;
 
 function ghToken() {
   try { return localStorage.getItem(GH_TOKEN_LS) || ""; } catch { return ""; }
@@ -529,6 +529,7 @@ class App {
     this.ghShas = new Map();
     this.ghTexts = {};
     this.ghTimer = 0;
+    this.ghPolling = false;
     // An address read out of the hash before the CSVs arrived: its filters
     // can't be resolved against rows that don't exist yet, so it waits here
     // for the first ingest.
@@ -893,8 +894,10 @@ class App {
 
   /* The remote counterpart of the FileSystemObserver: poll the tree, but
      conditionally. A 304 doesn't count against the rate limit, so the steady
-     state of this is free — and while the tab is hidden it doesn't even do
-     that. */
+     state of this is free even at a few seconds apart — and while the tab is
+     hidden it doesn't even do that. Coming back to the tool (focus, or the tab
+     becoming visible) polls straight away, so the wait is only ever paid by a
+     window you were already looking at. */
   ghWatch() {
     this.ghUnwatch();
     this.ghTimer = setInterval(() => { if (!document.hidden) this.ghPoll(); }, GH_POLL_MS);
@@ -907,20 +910,30 @@ class App {
 
   async ghPoll() {
     if (this.state.source !== "github" || !ghToken()) return;
-    let t;
+    // At this cadence a slow tree read — or the blob fetches after one that
+    // moved — can still be running when the next trigger arrives, and focus
+    // and visibilitychange often arrive together. One at a time.
+    if (this.ghPolling) return;
+    this.ghPolling = true;
     try {
-      t = await ghTree({ etag: this.ghEtag });
-    } catch (e) {
-      // A revoked token or a rate limit would otherwise fail again every 60s:
-      // say so once and stop. A transient network blip waits for the next tick.
-      if (e.status === 401 || e.status === 403 || e.status === 404 || e.status === 429) {
-        this.ghUnwatch();
-        this.notice(e.message);
+      let t;
+      try {
+        t = await ghTree({ etag: this.ghEtag });
+      } catch (e) {
+        // A revoked token or a rate limit would otherwise fail again every
+        // tick: say so once and stop. A transient network blip waits for the
+        // next one.
+        if (e.status === 401 || e.status === 403 || e.status === 404 || e.status === 429) {
+          this.ghUnwatch();
+          this.notice(e.message);
+        }
+        return;
       }
-      return;
+      if (!t) return;                                // 304: nothing moved
+      await this.refreshWith(() => this.ghFetch(t));
+    } finally {
+      this.ghPolling = false;
     }
-    if (!t) return;                                  // 304: nothing moved
-    await this.refreshWith(() => this.ghFetch(t));
   }
 
   // "Forget" is only meaningful once something is stored.
@@ -1642,9 +1655,14 @@ class App {
       this.showLanding();
       this.err("Token forgotten.");
     });
-    // A poll skipped while hidden shouldn't mean stale data on the way back.
+    // A poll skipped while hidden shouldn't mean stale data on the way back,
+    // and coming back to the window shouldn't mean waiting out a tick either.
+    // ghPoll ignores the second of these when they fire together.
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden && this.state.source === "github") this.ghPoll();
+    });
+    addEventListener("focus", () => {
+      if (this.state.source === "github") this.ghPoll();
     });
     addEventListener("resize", () => this.setStickyWidth());   // tabs: see the observer in start()
 
