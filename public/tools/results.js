@@ -126,9 +126,56 @@ const pool = v => String(v || "").split("+").map(s => s.trim()).filter(Boolean);
 const lab = {
   primer: new Map(),      // lower-cased primers.csv Label -> row
   primerLabels: [],       // same keys, longest first, for the prefix fallback
+  reagent: new Map(),     // lower-cased reagents.csv Label -> Label as written
+  assay: new Map(),       // lower-cased assays.csv Name -> Name as written
   source: new Map(),      // samples.csv Label -> Source
   tubes: new Set(),       // cdna.csv Tube labels, so a submitted tube can link
 };
+
+/* `None` is not an assay: it is the sentinel for a channel nothing was aimed
+   at, kept so the noise on an unused channel can be read next to the real one.
+   It names no row anywhere, by design. */
+const isNone = name => name.toLowerCase() === "none";
+
+/* ====================== a name to the row that defines it ======================
+   An assay name in this file names a row in the Inventory block, and which
+   file that row is in is the whole nuance qPCR-results.md and assays.md spell
+   out. `Primer` records the assay *as prepared*, so a reagents.csv tube is what
+   it primarily names; the primers.csv design behind it is a level further down,
+   and `assays.csv` holds the multi-tube panels and the sequencing schemes.
+   `Amplicon` reads the other way round — a design, or a tiling panel.
+
+   So the caller passes the order to look in, and the match is exact (folding
+   case, which is all these four columns' spellings ever differ by). Nothing
+   fuzzy: the prefix rule below is for finding a *design* behind a preparation,
+   which is a different question from where this name is written down. */
+const TABLES = {
+  primers:  () => [lab.primer, "Label"],
+  reagents: () => [lab.reagent, "Label"],
+  assays:   () => [lab.assay, "Name"],
+};
+
+function defn(name, order) {
+  const key = String(name || "").trim().toLowerCase();
+  if (!key || isNone(key)) return null;
+  for (const tab of order) {
+    const [map, col] = TABLES[tab]();
+    const hit = map.get(key);
+    // primers.csv is kept as whole rows, the other two as just their label
+    if (hit) return { tab: "inv-" + tab, file: tab + ".csv",
+      spec: { [col]: [typeof hit === "string" ? hit : hit[col]] } };
+  }
+  return null;
+}
+
+// The same, already a link — or plain text where the name defines nothing, so
+// an unlinked name reads as exactly that.
+function defnLink(name, order, what) {
+  const t = defn(name, order);
+  if (!t) return document.createTextNode(name);
+  return link(name, { tab: t.tab, spec: t.spec },
+    `${Object.values(t.spec)[0][0]} in ${t.file} — ${what}`);
+}
 
 /* `Primer` names the assay as it was *prepared*, so it matches a reagent tube
    first and a primers.csv design only through it — and a reagent label is a
@@ -142,13 +189,17 @@ function design(name) {
   return pre ? lab.primer.get(pre) : null;
 }
 
-// The organisms a well's assays are looking for — what colours the row.
-function assaySpecies(primer, unknown) {
+/* The organisms a well's assays are looking for — what colours the row. A name
+   with no design behind it simply adds no colour, and that is not a fault: a
+   2020 panel tube (`RVP1 ma`, `PIVP ri`, `DRVP ri`) covers several assays at
+   once and deliberately has no primers.csv row, and a host gene (`B2M`, `RP`)
+   has a design but no species. Both leave the row uncoloured, which is honest —
+   what is worth reporting is a name that defines nothing anywhere, and ingest
+   counts those separately. */
+function assaySpecies(primer) {
   const out = [];
   for (const name of parts(primer)) {
-    const d = design(name);
-    if (!d) { unknown?.set(name, (unknown.get(name) || 0) + 1); continue; }
-    const sp = (d.Species || "").trim();
+    const sp = (design(name)?.Species || "").trim();
     if (sp && !out.includes(sp)) out.push(sp);
   }
   return out;
@@ -276,8 +327,8 @@ const views = {
       // is good for — the curves — the Cq itself now links to.
       { k: "Run",      t: T.clip, off: true,
         title: "The instrument run file these numbers came off, inside the Experiment folder" },
-      { k: "Species",  t: T.flag, title: "What this well's assays target, via primers.csv" },
-      { k: "Primer",   t: T.flag, title: "The assay as it was prepared" },
+      { k: "Species",  t: T.flag, title: "What this well's assays target, via primers.csv. Blank on a host gene, and on a panel tube covering several assays" },
+      { k: "Primer",   t: T.flag, title: "The assay as it was prepared — a reagents.csv tube, or the primers.csv design where no tube carries the name" },
       { k: "Determination", t: T.flag, title: "The subjective call for this well/channel — expected to change as later experiments learn more" },
       { k: "Cq",       t: cqCol, title: "Quantification cycle; blank and 0.0 both mean no amplification was called. A called Cq opens its curve on zpcr.rbyers.ca" },
       { k: "∆RFU",     t: num, title: "Total fluorescence gain — the height of the curve. Low tens is noise; a real amplification is typically 1000+" },
@@ -336,13 +387,19 @@ const views = {
         }
         return true;
       }
-      // A multiplexed well names several assays, and each of them has a whole
-      // history in this same file — so the link filters this tab down to it.
+      /* A multiplexed well names several assays, and each of them is defined
+         somewhere in the Inventory block — so each links to the row that
+         defines it. Reagents first, because this column records the assay as it
+         was *prepared*: `RVP1 ma` and `PIVP ri` are tubes covering several
+         assays, whole records in reagents.csv with no primers.csv design to
+         reach, and the click should land on the tube rather than nowhere.
+         The other direction — every well an assay has been run in — is the link
+         waiting on the far side, off the Label column of either tab. */
       if (c.k === "Primer" && val) {
         for (const p of parts(val)) {
           if (td.childNodes.length) td.append(" + ");
-          td.append(link(p, { tab: "res-results", spec: { Primer: [p] } },
-            `Every well ${p} has ever been run in`));
+          td.append(defnLink(p, ["reagents", "primers", "assays"],
+            "the assay this well was run with"));
         }
         return true;
       }
@@ -438,6 +495,18 @@ const views = {
           `${val} in the cDNA ledger`));
         return true;
       }
+      /* An amplicon is what was read, so it names a design — or, for a tiling
+         scheme (`Artic v3`, `RespiCoV` and its subpools), the assays.csv row
+         that is the whole record of one. Designs first, the opposite of the
+         qPCR tab: this column is written at the design level, not as a tube. */
+      if (c.k === "Amplicon" && val) {
+        for (const n of ampliconParts(val)) {
+          if (td.childNodes.length) td.append(", ");
+          td.append(defnLink(n, ["primers", "assays", "reagents"],
+            "what was amplified"));
+        }
+        return true;
+      }
       return commonCell(td, c, row, val);
     },
   },
@@ -449,9 +518,11 @@ const uniq = xs => [...new Set(xs.filter(Boolean))];
 /* An amplicon names one or more primers.csv designs (or an assays.csv panel),
    comma-separated — so a library is coloured by what it was trying to read,
    which is the same rule the qPCR tables are coloured by. */
+const ampliconParts = v => String(v || "").split(",").map(s => s.trim()).filter(Boolean);
+
 function ampliconSpecies(amplicon) {
   const out = [];
-  for (const name of String(amplicon || "").split(",").map(s => s.trim()).filter(Boolean)) {
+  for (const name of ampliconParts(amplicon)) {
     const sp = (design(name)?.Species || "").trim();
     if (sp && !out.includes(sp)) out.push(sp);
   }
@@ -526,33 +597,60 @@ function ingest(tables) {
   // longest first, so `HRV ma Cy5` prefers `HRV ma` over `HRV`
   lab.primerLabels = [...lab.primer.keys()].sort((a, b) => b.length - a.length);
 
+  // The two other places an assay name can be defined. Only the label is kept:
+  // these tabs have their own rows, and all this block needs is what to link to.
+  const labels = (file, col) => new Map((tables[file]?.rows || [])
+    .map(r => (r[col] || "").trim()).filter(Boolean)
+    .map(v => [v.toLowerCase(), v]));
+  lab.reagent = labels("reagents.csv", "Label");
+  lab.assay = labels("assays.csv", "Name");
+
   lab.source = new Map();
   for (const s of tables["samples.csv"]?.rows || []) {
     if (s.Label) lab.source.set(s.Label, s.Source || "");
   }
   lab.tubes = new Set((tables["cdna.csv"]?.rows || []).map(r => r.Tube).filter(Boolean));
 
+  /* A name that defines nothing in any of the three files is the one thing
+     worth reporting — a typo, or a tube that was never written down. Failing to
+     match primers.csv is not: qPCR-results.md is explicit that `Primer` names
+     the assay as prepared, so a reagents.csv tube is a complete answer, and the
+     2020 panels (`RVP1 ma`, `PIVP ri`, `DRVP ri`) have no design row on
+     purpose. This is the same resolution tools/check-data.py enforces. */
   const unknown = new Map();
+  const seen = (name, order) => {
+    if (!isNone(name) && !defn(name, order)) unknown.set(name, (unknown.get(name) || 0) + 1);
+  };
   for (const r of results.rows) {
-    r.Species = assaySpecies(r.Primer, unknown).join(" + ");
+    r.Species = assaySpecies(r.Primer).join(" + ");
     r.Instrument = instrumentOf(r.Channel);
     r.Source = uniq(pool(r.Sample).map(x => lab.source.get(x))).join(" + ");
+    for (const p of parts(r.Primer)) seen(p, ["reagents", "primers", "assays"]);
   }
 
   const sequencing = tables["sequencing.csv"]?.rows || [];
   for (const r of sequencing) {
     r.Species = ampliconSpecies(r.Amplicon).join(" + ");
     r.Source = uniq(pool(r.Sample).map(x => lab.source.get(x))).join(" + ");
+    for (const n of ampliconParts(r.Amplicon)) seen(n, ["primers", "assays", "reagents"]);
   }
 
+  /* A missing file is reported instead of what it would have resolved: with one
+     of the three absent, every name it defines reads as unresolved, and that is
+     the folder's state rather than a fault in the data. */
+  const missing = ["primers.csv", "reagents.csv", "assays.csv"].filter(f => !tables[f]);
   let notice = "";
-  if (!tables["primers.csv"]) {
-    notice = "No primers.csv in that folder — rows can't be coloured by what the assay targets.";
+  if (missing.length) {
+    notice = `No ${missing.join(" or ")} in that folder — assay names can't be `
+      + `resolved to the row that defines them, so they aren't linked`
+      + (tables["primers.csv"] ? "." : ", and rows can't be coloured by what the assay targets.");
   } else if (unknown.size) {
     const list = [...unknown.entries()].sort((a, b) => b[1] - a[1])
-      .map(([n, c]) => `${n} (${c})`).join(", ");
-    notice = `${unknown.size} assay name${unknown.size > 1 ? "s" : ""} in Primer `
-      + `don't resolve against primers.csv — panels and pools mostly: ${list}`;
+      .map(([n, c]) => c > 1 ? `${n} (${c})` : n).join(", ");
+    const many = unknown.size > 1;
+    notice = `${unknown.size} assay name${many ? "s" : ""} ${many ? "define" : "defines"} `
+      + `nothing in primers.csv, reagents.csv or assays.csv, so `
+      + `${many ? "they aren't" : "it isn't"} linked: ${list}`;
   }
 
   // The App keys rows by tab id, which is qualified with the block they belong
