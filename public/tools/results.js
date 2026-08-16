@@ -25,7 +25,7 @@
 
 (() => {
 const { T, esc, dnum, dateOnly, yearOf, cmpLabel, cmpText,
-        hasHue, hueOf, isWarm, statTable, link } = Dataview;
+        hasHue, hueOf, isWarm, statTable, link, extLink } = Dataview;
 
 /* ============================ conventions ============================ */
 
@@ -64,6 +64,38 @@ const cmpRun = (a, b) => (!a - !b) || (dnum(b) ?? -Infinity) - (dnum(a) ?? -Infi
 
 // dir 0 on the Date column is the third click: gather each run into a group
 const runSort = s => s.k === "Date" && s.dir === 0;
+
+/* ============================ the curves behind a Cq ============================
+   A Cq is a number read off an amplification curve, and the curve itself is in
+   the instrument's own run file — which zpcr.rbyers.ca opens. `Run` names that
+   file and `Experiment` names its folder, so the path qPCR-results.md defines
+   reconstructs from the row alone (the year is the folder's own date prefix):
+
+     experiments/<year>/<Experiment>/<Run>
+
+   The app addresses a file by its *catalog* name, which for one read off disk
+   is the granted folder's label followed by the path beneath it — so the link
+   only resolves for someone who has granted `experiments/` and loaded the file
+   there. That's the assumption this link is written under; on a miss the app
+   selects nothing and shows the curves view empty, which is the honest answer
+   rather than another run's curves. Nothing here leaks: a fragment never
+   reaches the server, so the folder names stay in the reader's own browser.
+
+   Both instruments' formats are supported over there (`.zpcr` and `.bmrun`
+   alike), so this is not a CFX96-only link.
+
+   The caveat qPCR-results.md gives applies: a plate that served two
+   experiments is filed under one of them, so a row whose `Experiment` is the
+   other one names a path that folder doesn't hold. `Experiment` is still the
+   join key and the copy is usually in both folders; a link that misses is the
+   same empty view as a file that was never loaded. */
+const ZPCR_APP = "https://zpcr.rbyers.ca/";
+function curvesUrl(row) {
+  const exp = row.Experiment || "", run = row.Run || "";
+  if (!run || !/^\d{4}-/.test(exp)) return "";
+  const file = `experiments/${exp.slice(0, 4)}/${exp}/${run}`;
+  return ZPCR_APP + "#" + new URLSearchParams({ file, view: "curves" });
+}
 
 /* Several assays in one well are recorded joined with " + ", and each part
    resolves separately (a bare "+" is part of a name — `Covid19 N+RdRP ys`). */
@@ -225,10 +257,14 @@ const views = {
         title: "Sample label, indexing samples.csv; NTC for a no-template control" },
       { k: "Date",     t: T.date, title: "When the run was read" },
       { k: "Experiment", t: T.clip, title: "The experiments/ folder this row belongs to — the join key into the notes" },
+      // Off by default: it says nothing about the biology, and the one thing it
+      // is good for — the curves — the Cq itself now links to.
+      { k: "Run",      t: T.clip, off: true,
+        title: "The instrument run file these numbers came off, inside the Experiment folder" },
       { k: "Species",  t: T.flag, title: "What this well's assays target, via primers.csv" },
       { k: "Primer",   t: T.flag, title: "The assay as it was prepared" },
       { k: "Determination", t: T.flag, title: "The subjective call for this well/channel — expected to change as later experiments learn more" },
-      { k: "Cq",       t: cqCol, title: "Quantification cycle; blank and 0.0 both mean no amplification was called" },
+      { k: "Cq",       t: cqCol, title: "Quantification cycle; blank and 0.0 both mean no amplification was called. A called Cq opens its curve on zpcr.rbyers.ca" },
       { k: "∆RFU",     t: num, title: "Total fluorescence gain — the height of the curve. Low tens is noise; a real amplification is typically 1000+" },
       { k: "Melt peak", t: num, title: "Melting temperature of the dominant melt-curve peak (°C)" },
       { k: "Melt shape", t: T.clip, off: true },
@@ -293,6 +329,16 @@ const views = {
           td.append(link(p, { tab: "res-results", spec: { Primer: [p] } },
             `Every well ${p} has ever been run in`));
         }
+        return true;
+      }
+      // A called Cq opens the curve it was read off. commonCell draws the wells
+      // with no Cq, and those get no link: there is a curve there too, but the
+      // reason to go and look is the number, so an em dash stays an em dash.
+      if (c.k === "Cq" && cq(val) !== null) {
+        const url = curvesUrl(row);
+        if (!url) return false;
+        td.append(extLink(val, url,
+          `The ${row.Well} curves in ${row.Run}, on zpcr.rbyers.ca`));
         return true;
       }
       return commonCell(td, c, row, val);
