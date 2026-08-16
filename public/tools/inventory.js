@@ -1032,19 +1032,6 @@ function ingest(tables) {
   const unresolvedParts = new Map();
   enrichAssays(rows.assays, unresolvedParts);
 
-  // Calls recorded against wells that qPCR-results.csv doesn't have. The
-  // numbers in Confirmed+ were read off something, so this is a gap in the
-  // results file rather than a naming problem — worth saying, since it's
-  // invisible until you go looking for the wells behind a call.
-  const noWells = new Map();
-  if (tables["qPCR-results.csv"]) for (const r of rows.samples) {
-    for (const e of confirmedEntries(r["Confirmed+"])) {
-      if (!e.cq || hasWell(r.Label, e.bare)) continue;
-      const k = `${r.Label} ${e.bare}`;
-      noWells.set(k, (noWells.get(k) || 0) + 1);
-    }
-  }
-
   /* Say so rather than quietly leaving a row uncoloured or a name unlinked.
      Only the columns that really are join keys are reported: a name in
      `Confirmed+` or in an assay's `Components` is meant to identify a row
@@ -1063,10 +1050,9 @@ function ingest(tables) {
       + `a reagents.csv tube nor a primers.csv design, so it isn't linked: `
       + `${listOf(unresolvedParts)}`);
   }
-  if (noWells.size) {
-    notices.push(`${count(noWells, "Confirmed+ call")} cite${noWells.size > 1 ? "" : "s"} `
-      + `a Cq with no matching well in qPCR-results.csv: ${listOf(noWells)}`);
-  }
+  // A Confirmed+ call whose wells aren't in qPCR-results.csv isn't a fault —
+  // plenty of calls predate the results file — so it goes unremarked; the Cq
+  // just stays plain text instead of linking to the wells.
   // The App keys rows by tab id, which is qualified with the block they belong
   // to; in here they are just the files they came out of.
   return {
