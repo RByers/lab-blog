@@ -373,6 +373,7 @@ const coloured = {
 const views = {
   "inv-samples": {
     label: "Samples",
+    file: "samples.csv",
     key: "Label",
     ...coloured,
     sort: { k: "Date", dir: 0 },      // grouped by cold episode
@@ -496,6 +497,7 @@ const views = {
 
   "inv-pathogens": {
     label: "Pathogens",
+    file: "pathogens.csv",
     key: "Sample",
     ...coloured,
     sort: { k: "Date", dir: -1 },
@@ -543,6 +545,7 @@ const views = {
 
   "inv-species": {
     label: "Species",
+    file: "species.csv",
     key: "Species",
     ...coloured,
     sort: { k: "Species", dir: 1 },
@@ -572,6 +575,7 @@ const views = {
 
   "inv-primers": {
     label: "Primers",
+    file: "primers.csv",
     key: "Label",
     ...coloured,
     sort: { k: "Label", dir: 1 },     // a reference table, not events
@@ -600,11 +604,12 @@ const views = {
       { k: "Notes",    t: T.clip },
     ],
     cell(td, c, row, val) {
-      // A design's roll-up over there: how often it has come up positive, its
-      // usual Cq, its contamination history — where it has ever been run.
+      // Where the design has ever been run: the qPCR tab matches a design
+      // label against every preparation of it, so this reaches `HRV ma grn`
+      // and `HRV ma Cy5` alike.
       if (c.k === "Label" && val && namesAssay(lab.assayed, val)) {
-        td.append(link(val, { tab: "res-assays", spec: { Primer: [val] } },
-          `Every qPCR assay prepared from the ${val} design`));
+        td.append(link(val, { tab: "res-results", spec: { Primer: [val] } },
+          `Every well run with an assay prepared from the ${val} design`));
         return true;
       }
       // The paper the design came from. citationURL is one-to-one with
@@ -620,6 +625,7 @@ const views = {
 
   "inv-reagents": {
     label: "Reagents",
+    file: "reagents.csv",
     key: "Label",
     ...coloured,
     sort: { k: "Label", dir: 1 },
@@ -685,6 +691,7 @@ const views = {
      the notes use to the things on the bench. */
   "inv-assays": {
     label: "Assays",
+    file: "assays.csv",
     key: "Name",
     ...coloured,
     sort: { k: "Name", dir: 1 },       // a reference table, not events
@@ -722,6 +729,7 @@ const views = {
      every ingest, which is the whole reason the file is shaped this way. */
   "inv-cdna": {
     label: "cDNA",
+    file: "cdna.csv",
     key: "Tube",
     ...coloured,
     sort: { k: "Tube", dir: 1 },      // freezer order: tubes sit in sample order

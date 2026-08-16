@@ -10,7 +10,7 @@
  *
  * The tabs come in blocks — Inventory and Results — one per group, assembled by
  * data.js. Tab ids are unique across the whole tool (`inv-samples`,
- * `res-samples`), because they are what the address bar names and what one
+ * `res-results`), because they are what the address bar names and what one
  * tab's links point at, and a link crosses a block boundary as freely as it
  * stays inside one.
  *
@@ -265,6 +265,13 @@ async function idbGet() {
    in one and the others come up already able to read. */
 const GH_REPO = "RByers/MolBioLab";
 const GH_DIR = "data";
+/* Every CSV in that folder has a `.md` beside it saying what its columns mean
+   and what the conventions in them are — the documentation this tool is a
+   viewer for. The About link points at the one belonging to the current tab,
+   on the canonical branch rather than on whatever the loaded data came from:
+   the docs are the same wherever the folder was picked up from. */
+const docsURL = file =>
+  `https://github.com/${GH_REPO}/tree/main/${GH_DIR}/${file.replace(/\.csv$/, ".md")}`;
 const GH_TOKEN_LS = "molbiolab.gh.token";
 const GH_POLL_MS = 5_000;
 
@@ -454,6 +461,7 @@ function buildChrome(cfg, tabs) {
     <input class="search" id="q" type="search" placeholder="Search all columns…" autocomplete="off">
     <button class="btn" id="colsBtn" popovertarget="colsMenu" aria-expanded="false">Columns</button>
     <button class="btn" id="clearBtn" disabled>Clear filters</button>
+    <a class="btn" id="aboutLink" target="_blank" rel="noopener noreferrer">About</a>
   </div>
 </header>
 
@@ -514,6 +522,11 @@ class App {
     // address space, and a link doesn't know or care which block it lands in.
     this.views = Object.assign({}, ...this.groups.map(g => g.views));
     this.names = Object.keys(this.views);
+    // A data tab is a view onto exactly one of the CSVs, which is what lets it
+    // say where its documentation is; a tab that would be a roll-up of several
+    // files belongs in the group's computed `tabs` instead.
+    for (const id of this.names)
+      if (!this.views[id].file) throw new Error(`view ${id} names no data file`);
     // one block per group: its data views, then whatever computed tabs it adds
     this.tabs = this.groups.flatMap(g => [
       ...Object.keys(g.views).map(id => ({ id, group: g.id, label: g.views[id].label || id })),
@@ -1240,6 +1253,10 @@ class App {
 
     const v = s.view, def = this.views[v], cols = this.visibleCols();
     const rows = this.activeRows();
+    // Every data tab is one file, so "about this tab" is that file's docs.
+    const about = $("#aboutLink");
+    about.href = docsURL(def.file);
+    about.title = `What the columns in ${def.file} mean — the docs on GitHub`;
     this.renderHead(cols);
     const shown = this.renderBody(cols, rows);
 

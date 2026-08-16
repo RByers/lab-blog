@@ -139,6 +139,9 @@ h1 a:hover { color: var(--accent); }
   padding: 4px 10px; border-radius: 6px; white-space: nowrap;
 }
 .btn:hover { background: var(--panel-2); }
+/* The About link is a link, not a button — it opens the docs in a new tab. It
+   sits in the same row as the table's controls, so it looks like one. */
+a.btn { color: inherit; text-decoration: none; }
 /* Kept in the layout rather than hidden when there is nothing to clear, so the
    row doesn't reflow the moment a filter is applied or a tab changes. */
 .btn:disabled { color: var(--ink-dim); opacity: .55; cursor: default; }

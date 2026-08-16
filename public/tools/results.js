@@ -9,19 +9,22 @@
  * contamination go, what has ever been run on S90, which flow cells were worth
  * the money.
  *
- * Four tables — the wells themselves, rolled up per assay, rolled up per
- * sample, and the sequencing libraries — plus a per-year summary. The generic
- * machinery (folder, sorting, filtering, columns, legend, the address bar) is
- * dataview.js; the same folder and the same species colours as the inventory.
+ * Two tables — the wells themselves and the sequencing libraries — plus a
+ * per-year summary. One tab per file and no roll-ups: an Assays and a Samples
+ * table used to live here, but the Inventory block already has a tab for each
+ * of those files, and a tab that was a summary of another tab's rows was the
+ * one place in the tool where what you were looking at wasn't a file. The
+ * generic machinery (folder, sorting, filtering, columns, legend, the address
+ * bar) is dataview.js; the same folder and species colours as the inventory.
  *
- * Tab ids are `res-`-prefixed against the inventory's `inv-`, since both blocks
- * have a Samples and an Assays tab and they share one address space. A link
- * into the Inventory tabs is an ordinary link: same page, other block.
+ * Tab ids are `res-`-prefixed against the inventory's `inv-`, since the two
+ * blocks share one address space. A link into the Inventory tabs is an
+ * ordinary link: same page, other block.
  */
 "use strict";
 
 (() => {
-const { T, esc, dnum, dateOnly, yearOf, cmpLabel, cmpText, median, round,
+const { T, esc, dnum, dateOnly, yearOf, cmpLabel, cmpText,
         hasHue, hueOf, isWarm, statTable, link } = Dataview;
 
 /* ============================ conventions ============================ */
@@ -78,7 +81,6 @@ const lab = {
   primerLabels: [],       // same keys, longest first, for the prefix fallback
   source: new Map(),      // samples.csv Label -> Source
   tubes: new Set(),       // cdna.csv Tube labels, so a submitted tube can link
-  seqRuns: new Map(),     // samples.csv Label -> the runs it was sequenced in
 };
 
 /* `Primer` names the assay as it was *prepared*, so it matches a reagent tube
@@ -92,11 +94,6 @@ function design(name) {
   const pre = lab.primerLabels.find(l => key.startsWith(l + " "));
   return pre ? lab.primer.get(pre) : null;
 }
-
-/* An assay with no species behind it is a host control (B2M, RP, RNaseP ys) or
-   an unresolved panel name — either way not something a sample can be said to
-   have tested positive *for*. */
-const isTarget = name => !!(design(name)?.Species || "").trim();
 
 // The organisms a well's assays are looking for — what colours the row.
 function assaySpecies(primer, unknown) {
@@ -137,8 +134,8 @@ function speciesLegend(rows, app) {
   };
 }
 
-// Colouring is by what the assay targets, so it is the same on all three
-// tables; only "what counts as a hit" differs, which is `hi`.
+// Colouring is by what the assay targets, so it is the same on both tables;
+// only "what counts as a hit" differs, which is `hi`.
 const coloured = {
   tint: r => { const sp = speciesOf(r); const s = sp.find(hasHue) || sp[0]; return s ? Dataview.tint(s) : null; },
   tints: speciesOf,
@@ -194,9 +191,10 @@ const cqCol = { cls: "num", cmp: cmpCq, cq: true };
 
 const views = {
   "res-results": {
-    // "qPCR" rather than "Results": the block is already called that, and the
-    // tab is the wells themselves — the other three are roll-ups of them.
+    // "qPCR" rather than "Results": the block is already called that, and this
+    // is the qPCR file next to the sequencing one.
     label: "qPCR",
+    file: "qPCR-results.csv",
     key: "Sample",
     ...coloured,
     hi: isPositive,
@@ -287,92 +285,14 @@ const views = {
         }
         return true;
       }
+      // A multiplexed well names several assays, and each of them has a whole
+      // history in this same file — so the link filters this tab down to it.
       if (c.k === "Primer" && val) {
         for (const p of parts(val)) {
           if (td.childNodes.length) td.append(" + ");
-          td.append(link(p, { tab: "res-assays", spec: { Primer: [p] } },
-            `Everything ${p} has ever been run on`));
+          td.append(link(p, { tab: "res-results", spec: { Primer: [p] } },
+            `Every well ${p} has ever been run in`));
         }
-        return true;
-      }
-      return commonCell(td, c, row, val);
-    },
-  },
-
-  "res-assays": {
-    label: "Assays",
-    key: "Primer",
-    ...coloured,
-    hi: r => +r.Positive > 0,
-    sort: { k: "Wells", dir: -1 },
-    cols: [
-      { k: "Primer",   t: T.label, title: "The assay as prepared. The same target with a different reference is a different assay" },
-      { k: "Species",  t: T.flag },
-      { k: "Description", t: T.clip, title: "From primers.csv, via the design this preparation is of" },
-      { k: "Wells",    t: num, title: "Rows in qPCR-results.csv naming this assay" },
-      { k: "Runs",     t: num, title: "Distinct dates it was used on" },
-      { k: "Positive", t: num },
-      { k: "Negative", t: num, off: true },
-      { k: "Contamination", t: num, title: "Amplification attributed to contamination rather than target" },
-      { k: "Other",    t: num, off: true, title: "Inconclusive, Failed, or not yet assessed" },
-      { k: "Positive %", t: num },
-      { k: "Cq median", t: num, title: "Median Cq of the positive wells" },
-      { k: "Cq best",  t: num, title: "Lowest Cq ever called on this assay" },
-      { k: "∆RFU median", t: num, off: true, title: "Median fluorescence gain of the positive wells" },
-      { k: "Melt",     t: num, off: true, title: "Median melt peak (°C) of the positive wells" },
-      { k: "Product Tm", t: num, off: true, title: "Melt temperature the design expects — compare with Melt" },
-      { k: "Probe",    t: T.flag, off: true, title: "Probe dyes this assay has been read on" },
-      { k: "First",    t: T.date },
-      { k: "Last",     t: T.date },
-      { k: "Author",   t: T.flag, off: true, title: "Whose published design it is, from primers.csv" },
-    ],
-    cell(td, c, row, val) {
-      if (c.k === "Primer" && val) {
-        td.append(link(val, { tab: "res-results", spec: { Primer: [val] } },
-          `The ${row.Wells} wells behind this row`));
-        return true;
-      }
-      return commonCell(td, c, row, val);
-    },
-  },
-
-  "res-samples": {
-    label: "Samples",
-    key: "Sample",
-    ...coloured,
-    hi: r => +r.Positive > 0,
-    sort: { k: "Last", dir: -1 },
-    cols: [
-      { k: "Sample",   t: T.label },
-      { k: "Source",   t: T.flag, title: "Who it came from, via samples.csv" },
-      { k: "Species",  t: T.flag, title: "What it tested positive for" },
-      { k: "Found",    t: T.clip, title: "The assays that called it positive, host controls aside" },
-      { k: "Wells",    t: num },
-      { k: "Runs",     t: num },
-      { k: "Assays",   t: num, title: "Distinct assays ever run against this sample" },
-      { k: "Positive", t: num },
-      { k: "Contamination", t: num, off: true },
-      { k: "Cq best",  t: num, title: "Lowest Cq called on any positive well" },
-      { k: "B2M",      t: num, title: "Best Cq on the B2M host control — how much human material the extraction got" },
-      { k: "Tested",   t: T.clip, off: true, title: "Every assay ever run against this sample" },
-      { k: "Seq",      t: T.flag, title: "Sequencing runs this sample was in a library for" },
-      { k: "First",    t: T.date },
-      { k: "Last",     t: T.date },
-    ],
-    cell(td, c, row, val) {
-      if (c.k === "Sample" && val) {
-        td.append(link(val, { tab: "res-results", spec: { Sample: [val] } },
-          `The ${row.Wells} wells behind this row`));
-        return true;
-      }
-      if (c.k === "Source" && val) {
-        td.append(link(val, { tab: "inv-samples", spec: { Source: [val] } },
-          `Every sample from ${val}`));
-        return true;
-      }
-      if (c.k === "Seq" && val) {
-        td.append(link(val, { tab: "res-sequencing", spec: { Sample: [row.Sample] } },
-          `The libraries made from ${row.Sample}`));
         return true;
       }
       return commonCell(td, c, row, val);
@@ -387,6 +307,7 @@ const views = {
      every library, gathered into its run, with the verdict on each. */
   "res-sequencing": {
     label: "Sequencing",
+    file: "sequencing.csv",
     key: "Sample",
     ...coloured,
     hi: r => r.Determination === "Genotyped",
@@ -461,104 +382,8 @@ const views = {
   },
 };
 
-/* ============================ roll-ups ============================ */
-function tally(rows) {
-  const t = { Positive: 0, Negative: 0, Contamination: 0, Other: 0 };
-  for (const r of rows) {
-    const d = r.Determination;
-    if (d === POSITIVE) t.Positive++;
-    else if (d === "Negative") t.Negative++;
-    else if (/^Contamination/.test(d)) t.Contamination++;
-    else t.Other++;
-  }
-  return t;
-}
-// first / last date a set of rows covers, as the plain dates they're filed under
-function dates(rows) {
-  let lo = null, hi = null, loS = "", hiS = "";
-  for (const r of rows) {
-    const t = dnum(r.Date);
-    if (t === null) continue;
-    if (lo === null || t < lo) { lo = t; loS = dateOnly(r.Date); }
-    if (hi === null || t > hi) { hi = t; hiS = dateOnly(r.Date); }
-  }
-  return [loS, hiS];
-}
-const count = (rows, f) => String(rows.filter(f).length);
+/* ============================ helpers ============================ */
 const uniq = xs => [...new Set(xs.filter(Boolean))];
-
-function assayRows(results) {
-  const by = new Map();
-  for (const r of results) for (const name of parts(r.Primer)) {
-    if (!by.has(name)) by.set(name, []);
-    by.get(name).push(r);
-  }
-  return [...by].map(([name, rows]) => {
-    const t = tally(rows);
-    const pos = rows.filter(isPositive);
-    const cqs = pos.map(r => cq(r.Cq)).filter(n => n !== null);
-    const all = rows.map(r => cq(r.Cq)).filter(n => n !== null);
-    const rfu = pos.map(r => parseFloat(r["∆RFU"])).filter(Number.isFinite);
-    const melt = pos.map(r => parseFloat(r["Melt peak"])).filter(Number.isFinite);
-    const [first, last] = dates(rows);
-    const d = design(name) || {};
-    return {
-      Primer: name,
-      Species: (d.Species || "").trim(),
-      Description: d.Description || "",
-      Wells: String(rows.length),
-      Runs: String(uniq(rows.map(runOf)).length),
-      ...Object.fromEntries(Object.entries(t).map(([k, v]) => [k, String(v)])),
-      "Positive %": rows.length ? String(Math.round(100 * t.Positive / rows.length)) : "",
-      "Cq median": round(median(cqs)),
-      "Cq best": all.length ? round(Math.min(...all)) : "",
-      "∆RFU median": round(median(rfu), 0),
-      Melt: round(median(melt)),
-      "Product Tm": d["Product Tm"] || "",
-      Probe: uniq(rows.map(r => r.Probe)).join(", "),
-      Author: d.Author || "",
-      First: first, Last: last,
-    };
-  });
-}
-
-function sampleRows(results) {
-  const by = new Map();
-  for (const r of results) {
-    // pooled samples are joined with +, and each one was really tested
-    for (const s of String(r.Sample).split("+").map(x => x.trim()).filter(Boolean)) {
-      if (!by.has(s)) by.set(s, []);
-      by.get(s).push(r);
-    }
-  }
-  return [...by].map(([name, rows]) => {
-    const t = tally(rows);
-    const pos = rows.filter(isPositive);
-    const cqs = pos.map(r => cq(r.Cq)).filter(n => n !== null);
-    // B2M says how much human material came through the extraction, so it is
-    // read off the control wells rather than counted as a finding
-    const b2m = rows.filter(r => /^B2M/i.test(r.Primer)).map(r => cq(r.Cq)).filter(n => n !== null);
-    const [first, last] = dates(rows);
-    return {
-      Sample: name,
-      Source: lab.source.get(name) || "",
-      Species: uniq(pos.flatMap(r => speciesOf(r))).join(" + "),
-      // the host controls (B2M, RNaseP) are positive on nearly every sample
-      // that extracted properly, which is the opposite of a finding
-      Found: uniq(pos.flatMap(r => parts(r.Primer)).filter(isTarget)).join(", "),
-      Wells: String(rows.length),
-      Runs: String(uniq(rows.map(runOf)).length),
-      Assays: String(uniq(rows.flatMap(r => parts(r.Primer))).length),
-      Positive: String(t.Positive),
-      Contamination: String(t.Contamination),
-      "Cq best": cqs.length ? round(Math.min(...cqs)) : "",
-      B2M: b2m.length ? round(Math.min(...b2m)) : "",
-      Tested: uniq(rows.flatMap(r => parts(r.Primer))).sort(cmpText).join(", "),
-      Seq: [...(lab.seqRuns.get(name) || [])].join(", "),
-      First: first, Last: last,
-    };
-  });
-}
 
 /* An amplicon names one or more primers.csv designs (or an assays.csv panel),
    comma-separated — so a library is coloured by what it was trying to read,
@@ -653,17 +478,10 @@ function ingest(tables) {
     r.Source = uniq(pool(r.Sample).map(x => lab.source.get(x))).join(" + ");
   }
 
-  // Sequencing first: the per-sample roll-up wants to say which runs a sample
-  // was in, and that is read off these rows.
   const sequencing = tables["sequencing.csv"]?.rows || [];
-  lab.seqRuns = new Map();
   for (const r of sequencing) {
     r.Species = ampliconSpecies(r.Amplicon).join(" + ");
     r.Source = uniq(pool(r.Sample).map(x => lab.source.get(x))).join(" + ");
-    for (const s of pool(r.Sample)) {
-      if (!lab.seqRuns.has(s)) lab.seqRuns.set(s, new Set());
-      lab.seqRuns.get(s).add(r.Run);
-    }
   }
 
   let notice = "";
@@ -677,12 +495,10 @@ function ingest(tables) {
   }
 
   // The App keys rows by tab id, which is qualified with the block they belong
-  // to; in here they are just the tables they were built from.
+  // to; in here they are just the files they were read from.
   return {
     rows: {
       "res-results": results.rows,
-      "res-assays": assayRows(results.rows),
-      "res-samples": sampleRows(results.rows),
       "res-sequencing": sequencing,
     },
     notice,
