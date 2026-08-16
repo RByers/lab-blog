@@ -81,6 +81,19 @@ const runSort = s => s.k === "Date" && s.dir === 0;
    rather than another run's curves. Nothing here leaks: a fragment never
    reaches the server, so the folder names stay in the reader's own browser.
 
+   `wells=` narrows what that view draws to the one well the number was read
+   off, rather than handing over a plate of ninety-six curves to hunt through.
+   It's a selector over there (labels and ranges), and a single label is the
+   whole of it here — one row is one well. The app applies it to the file
+   `file=` names, so the same miss above is still just an empty view, and it
+   writes into the file's own selection, so a click on the plate replaces it.
+
+   `Well` is passed through as written rather than validated here, because the
+   grammar it has to satisfy belongs to the app. A Biomeme well is a bare
+   number (`1`..`9`) and no plate label at all; that names no well over there,
+   and a selector naming no well is ignored, which lands back on the whole-file
+   view this link used to give. Nothing to special-case.
+
    Both instruments' formats are supported over there (`.zpcr` and `.bmrun`
    alike), so this is not a CFX96-only link.
 
@@ -91,10 +104,12 @@ const runSort = s => s.k === "Date" && s.dir === 0;
    same empty view as a file that was never loaded. */
 const ZPCR_APP = "https://zpcr.rbyers.ca/";
 function curvesUrl(row) {
-  const exp = row.Experiment || "", run = row.Run || "";
+  const exp = row.Experiment || "", run = row.Run || "", well = row.Well || "";
   if (!run || !/^\d{4}-/.test(exp)) return "";
   const file = `experiments/${exp.slice(0, 4)}/${exp}/${run}`;
-  return ZPCR_APP + "#" + new URLSearchParams({ file, view: "curves" });
+  const hash = { file, view: "curves" };
+  if (well) hash.wells = well;
+  return ZPCR_APP + "#" + new URLSearchParams(hash);
 }
 
 /* Several assays in one well are recorded joined with " + ", and each part
