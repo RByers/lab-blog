@@ -584,6 +584,136 @@ function renderStats(wrap, app) {
   ]));
 }
 
+/* ============================ sequences ============================
+   How the sequenced samples of one species differ from each other. The
+   sequences live in pathogens.csv (an Inventory file, since a row there is a
+   conclusion about a sample), but aligning them is reading a result out of
+   them, so the tab sits here. All the work is sequences.js — grouping by the
+   declared `Species`, the alignment, the consensus and the differences — and
+   this is only a picture of what it returns.
+
+   One block per species: a ruler, the consensus, then a line per sample with
+   every base that differs from the consensus coloured and the rest dimmed (or,
+   ticked, drawn as dots so the differences are all that's left). Blank is
+   overhang — that read hasn't started yet, or has stopped. */
+let seqDots = false;
+let seqDrawn = null;           // what the pane holds now, so a re-render keeps its scroll
+
+// the per-column states compare() returns, as the class each is drawn with
+const SEQ_CLASS = { " ": "o", "=": "m", "x": "x", "-": "d", "+": "i", ".": "g", "n": "n" };
+
+function alnLine(row, states, dots) {
+  let html = "", cls = null, run = "";
+  const flush = () => { if (run) html += `<span class="${cls}">${run}</span>`; run = ""; };
+  for (let j = 0; j < row.length; j++) {
+    const st = states[j], c = SEQ_CLASS[st];
+    const ch = st === " " ? " " : st === "=" && dots ? "·" : row[j];
+    if (c !== cls) { flush(); cls = c; }
+    run += ch;
+  }
+  flush();
+  return html;
+}
+
+// a tick every ten columns, numbered where there's room for the number
+function ruler(L) {
+  let s = "";
+  for (let j = 1; j <= L; j++) {
+    if (j % 10 === 0) {
+      const n = String(j);
+      s = s.slice(0, s.length - n.length + 1) + n;
+    } else s += j % 5 === 0 ? ":" : "·";
+  }
+  return s;
+}
+
+function renderSequences(wrap, app) {
+  const rows = app.state.rows["inv-pathogens"] || [];
+  if (seqDrawn && seqDrawn.rows === rows && seqDrawn.dots === seqDots) return;
+  seqDrawn = { rows, dots: seqDots };
+
+  const groups = Sequences.analyze(rows);
+  const n = groups.reduce((t, g) => t + g.members.length, 0);
+  wrap.replaceChildren();
+  wrap.insertAdjacentHTML("beforeend",
+    `<h2>Sequences by species</h2><p class="sub">The ${n} sequences in <code>pathogens.csv</code>,
+     grouped by their declared <b>Species</b> and aligned within each group; each line is
+     coloured where it departs from the group's majority consensus —
+     <span class="aln-key"><span class="x">A</span> a different base,
+     <span class="d">-</span> a deletion, <span class="i">A</span> an insertion</span>.
+     Blank is overhang, where a read starts late or stops early; it isn't counted.
+     A group of one has nothing to differ from.</p>`);
+  const opt = document.createElement("label");
+  opt.className = "aln-opt";
+  opt.innerHTML = `<input type="checkbox"${seqDots ? " checked" : ""}> Draw matching bases as dots`;
+  opt.querySelector("input").addEventListener("change", e => {
+    seqDots = e.target.checked;
+    app.render();
+  });
+  wrap.append(opt);
+  if (!groups.length) {
+    wrap.insertAdjacentHTML("beforeend", `<p class="sub">No row has a <code>Sequence</code>.</p>`);
+    return;
+  }
+
+  for (const g of groups) {
+    const h = document.createElement("h2");
+    h.textContent = g.species;
+    const many = g.members.length > 1;
+    h.insertAdjacentHTML("beforeend", ` <span class="aln-sub">${g.members.length} `
+      + `sequence${many ? "s" : ""} · ${g.length} columns`
+      + (many ? ` · ${g.variable.length} variable` : "") + `</span>`);
+    wrap.append(h);
+
+    const box = document.createElement("div");
+    box.className = "aln";
+    const line = (label, seqHtml, cls = "") => {
+      const div = document.createElement("div");
+      div.className = "aln-row " + cls;
+      const lab = document.createElement("div");
+      lab.className = "aln-lab";
+      if (typeof label === "string") lab.textContent = label; else lab.append(...label);
+      const seq = document.createElement("div");
+      seq.className = "aln-seq";
+      seq.innerHTML = seqHtml;
+      div.append(lab, seq);
+      box.append(div);
+      return lab;
+    };
+    line("", esc(ruler(g.length)), "ruler");
+    if (many) {
+      // a consensus column is dimmed where fewer than half the reads cover it,
+      // and bold where some read disagrees with it
+      const variable = new Set(g.variable);
+      let html = "";
+      for (let j = 0; j < g.length; j++) {
+        const cls = [variable.has(j) ? "v" : "", g.depth[j] * 2 < g.members.length ? "thin" : ""]
+          .filter(Boolean).join(" ");
+        html += cls ? `<span class="${cls}" title="column ${j + 1}: ${g.support[j]} of ${g.depth[j]} reads">${g.consensus[j]}</span>`
+          : g.consensus[j];
+      }
+      line("consensus", html, "cons");
+    }
+    for (const m of g.members) {
+      const r = m.record, d = m.diff;
+      const a = link(m.label, { tab: "inv-pathogens", spec: { Sample: [m.label] } },
+        `${m.label} in pathogens.csv`);
+      const lab = line([a, " ", Object.assign(document.createElement("span"),
+        { className: "aln-type", textContent: r.Type || "" })],
+        many ? alnLine(m.aligned, d.states, seqDots) : esc(m.aligned));
+      if (many) {
+        const pct = d.identity === null ? "—" : (d.identity * 100).toFixed(1) + "%";
+        lab.insertAdjacentHTML("beforeend", `<span class="aln-id">${pct}</span>`);
+        lab.title = `${m.label}: ${d.same} matching, ${d.subs} substituted, ${d.ins} inserted, `
+          + `${d.dels} deleted against the consensus`
+          + (d.unknown ? `, ${d.unknown} uncalled` : "")
+          + ` — ${m.seq.length} bp, columns ${d.span[0] + 1}–${d.span[1] + 1}`;
+      } else lab.title = `${m.label}: ${m.seq.length} bp`;
+    }
+    wrap.append(box);
+  }
+}
+
 /* ============================ ingest ============================ */
 function ingest(tables) {
   const results = tables["qPCR-results.csv"];
@@ -669,7 +799,10 @@ Dataview.group({
   label: "Results",
   required: ["qPCR-results.csv"],
   views,
-  tabs: [{ id: "res-stats", label: "Stats", render: renderStats }],
+  tabs: [
+    { id: "res-sequences", label: "Sequences", render: renderSequences },
+    { id: "res-stats", label: "Stats", render: renderStats },
+  ],
   ingest,
 });
 

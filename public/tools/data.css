@@ -57,3 +57,37 @@ td.num { min-width: 4.5rem; }
    the width of the column on every screen. */
 td.sample { max-width: 9rem; }
 td.sample.open { max-width: 26rem; white-space: normal; }
+
+/* Sequences: one alignment per species, scrolling sideways as a block with the
+   labels pinned. The colours are the usual nucleotide-free kind — they mark
+   *what kind* of difference, not which base, so they stay readable on any row. */
+.aln-opt { display: inline-flex; gap: 6px; align-items: center; font-size: 12px; color: var(--ink-dim); }
+.stats h2 .aln-sub { font-weight: 400; font-size: 11.5px; color: var(--ink-dim); margin-left: 6px; }
+.aln {
+  overflow-x: auto; width: max-content; max-width: 100%;
+  border: 1px solid var(--line); border-radius: 6px; background: var(--panel);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.55;
+}
+.aln-row { display: flex; width: max-content; }
+.aln-lab {
+  position: sticky; left: 0; z-index: 1; flex: none; width: 12.5rem;
+  display: flex; gap: 6px; align-items: baseline; padding: 0 10px;
+  background: var(--panel); border-right: 1px solid var(--line);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 12px;
+  white-space: nowrap; overflow: hidden;
+}
+.aln-type { color: var(--ink-dim); overflow: hidden; text-overflow: ellipsis; }
+.aln-id { margin-left: auto; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.aln-seq { white-space: pre; padding: 0 10px; }
+.aln-row:hover .aln-lab, .aln-row:hover .aln-seq { background: var(--panel-2); }
+.aln-row.ruler { color: var(--ink-dim); border-bottom: 1px solid var(--line); }
+.aln-row.cons { font-weight: 600; border-bottom: 1px solid var(--line); }
+.aln-row.cons .aln-lab { color: var(--ink-dim); font-weight: 400; }
+.aln-row.cons .v { color: var(--accent); text-decoration: underline; }
+.aln-row.cons .thin { opacity: .45; }
+.aln-seq .m, .aln-seq .g { color: light-dark(#a3a8ad, #5e6368); }
+.aln .x, .aln-key .x { background: light-dark(#fde2a6, #5a4410); color: light-dark(#5c3f00, #fbe2a5); }
+.aln .d, .aln-key .d { background: light-dark(#fbd0ca, #5a1f18); color: light-dark(#8a2418, #ffb3a7); }
+.aln .i, .aln-key .i { background: light-dark(#cfe0fb, #1c3558); color: light-dark(#153e82, #b3cdf8); }
+.aln-seq .n { color: var(--ink-dim); font-style: italic; }
+.aln-key span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0 2px; border-radius: 2px; }
