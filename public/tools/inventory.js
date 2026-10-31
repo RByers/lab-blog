@@ -28,7 +28,6 @@ const lab = {
   assaySpecies: new Map(),// primers.csv: lower-cased Label -> Species
   commensal: new Set(),   // species.csv: Species with Pathogenicity=Commensal
   events: new Map(),      // cdna.csv: tube -> its ledger rows, in file order
-  hasCdna: new Set(),     // sample labels with at least one cDNA tube
   samples: new Set(),     // every samples.csv Label, for deciding what to link
   // The name → row indexes the links resolve against. Keyed lower-cased,
   // because spellings drift in case across the files.
@@ -378,7 +377,7 @@ const views = {
     ...coloured,
     sort: { k: "Date", dir: 0 },      // grouped by cold episode
     cols: [
-      { k: "Label",    t: T.label, title: "Links to this sample's cDNA tubes, where it has any" },
+      { k: "Label",    t: T.label, title: "Links to this sample's qPCR results, where it has any" },
       { k: "Date",     t: T.date },
       { k: "Source",   t: T.narrow },
       { k: "Species",  t: T.flag },
@@ -434,11 +433,11 @@ const views = {
       if (up || down) tr.dataset.cold = !up ? "first" : !down ? "last" : "mid";
     },
     cell(td, c, row, val) {
-      // The three ways out of a sample row: its cDNA tubes (here), the qPCR
-      // wells behind the call in Confirmed+, and the sequencing libraries.
-      if (c.k === "Label" && lab.hasCdna.has(val)) {
-        td.append(link(val, { tab: "inv-cdna", spec: { Sample: [val] } },
-          `cDNA tubes made from ${val}`));
+      // The three ways out of a sample row: its qPCR wells (here), the ones
+      // behind each call in Confirmed+, and the sequencing libraries.
+      if (c.k === "Label" && lab.wells.has(val)) {
+        td.append(link(val, { tab: "res-results", spec: { Sample: [val] } },
+          `qPCR results for ${val}`));
         return true;
       }
       /* `Confirmed+` is two kinds of thing per entry — `ENT rc (28.1, 27.8,
@@ -1035,7 +1034,6 @@ function ingest(tables) {
     lab.events.get(r.Tube).push(r);
   }
   rows.cdna = cdnaRows(lab.events, rows.samples);
-  lab.hasCdna = new Set(rows.cdna.flatMap(r => r.Sample.split("+").map(s => s.trim())));
 
   const unresolvedParts = new Map();
   enrichAssays(rows.assays, unresolvedParts);
