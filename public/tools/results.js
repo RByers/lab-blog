@@ -130,6 +130,7 @@ const lab = {
   assay: new Map(),       // lower-cased assays.csv Name -> Name as written
   source: new Map(),      // samples.csv Label -> Source
   tubes: new Set(),       // cdna.csv Tube labels, so a submitted tube can link
+  speciesRef: new Map(),  // species.csv Species -> RefSeq, where it has one
 };
 
 /* `None` is not an assay: it is the sentinel for a channel nothing was aimed
@@ -592,15 +593,143 @@ function renderStats(wrap, app) {
    declared `Species`, the alignment, the consensus and the differences — and
    this is only a picture of what it returns.
 
-   One block per species: a ruler, the consensus, then a line per sample with
-   every base that differs from the consensus coloured and the rest dimmed (or,
-   ticked, drawn as dots so the differences are all that's left). Blank is
-   overhang — that read hasn't started yet, or has stopped.
+   One block per species: a ruler, the species' reference, then a line per
+   sample with every base that differs from the reference coloured and the
+   rest dimmed (or, ticked, drawn as dots so the differences are all that's
+   left). Blank is overhang — that read hasn't started yet, or has stopped.
+
+   The reference is species.csv's RefSeq, fetched from NCBI by accession (the
+   only thing sent anywhere is that public accession). Where species.csv has
+   none, the frame its assays are recorded against in primers.csv stands in —
+   HRV-B and HRV-C have no RefSeq of their own, and their pan-enterovirus
+   assays are all quoted against NC_001617.1. Until it arrives, or if it
+   can't, the group is drawn against its own majority consensus instead.
+
+   Within the reference line, the primers and probe of the assay the samples
+   were amplified with are highlighted. Which assay that is isn't read off any
+   column — pathogens.csv's `PCR Assay` is what *detected* the virus, and the
+   sequencing.csv libraries name panels as often as designs — but found:
+   every primers.csv design for the species (or for the catch-all it is a
+   member of, `HRV` for `HRV-A`) is looked for in the reference, and the one
+   whose amplicon the samples fill is it.
 
    A link can ask for a `Type` (the Samples tab's Type column does): the lines
    of that type are highlighted and the first is scrolled to. */
 let seqDots = false;
 let seqDrawn = null;           // what the pane holds now, so a re-render keeps its scroll
+
+// A design's Species is the group's, or a catch-all the group's is a member of
+// — `HRV` for `HRV-A`, the same `<catch-all>-<member>` shape species.csv uses.
+const designFor = (designSp, sp) => !!designSp && (designSp === sp || sp.startsWith(designSp + "-"));
+
+function speciesDesigns(sp) {
+  const out = [];
+  for (const p of lab.primer.values())
+    if (p["Fwd Primer"] && p["Rev Primer"] && designFor((p.Species || "").trim(), sp))
+      out.push({ label: p.Label, fwd: p["Fwd Primer"], rev: p["Rev Primer"], probe: p.Probe || "" });
+  return out;
+}
+
+// species.csv's RefSeq, or else the accession most of its designs are quoted against
+function referenceFor(sp) {
+  const own = lab.speciesRef.get(sp);
+  if (own) return { accession: own, own: true };
+  const n = new Map();
+  for (const p of lab.primer.values()) {
+    const acc = (p.RefSeq || "").trim();
+    if (acc && p["Fwd Primer"] && designFor((p.Species || "").trim(), sp)) n.set(acc, (n.get(acc) || 0) + 1);
+  }
+  const best = [...n.entries()].sort((a, b) => b[1] - a[1])[0];
+  return best ? { accession: best[0], own: false } : null;
+}
+
+/* ---- fetching a reference ----
+   One request per accession, one at a time (NCBI asks for no more than three a
+   second without a key), and the genome kept in localStorage: an accession
+   with a version is a fixed sequence, and the tab shouldn't wait on the
+   network every visit. */
+const NCBI = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
+const refSeqs = new Map();     // accession -> { status: "loading" | "ok" | "failed", seq, error }
+let refQueue = Promise.resolve();
+let refVersion = 0;            // bumped as each arrives, so the tab redraws
+const REF_LS = "lab-refseq:";
+
+function wantReference(acc, app) {
+  if (refSeqs.has(acc)) return refSeqs.get(acc);
+  let cached = "";
+  try { cached = localStorage.getItem(REF_LS + acc) || ""; } catch {}
+  if (cached) {
+    refSeqs.set(acc, { status: "ok", seq: cached });
+    return refSeqs.get(acc);
+  }
+  const entry = { status: "loading" };
+  refSeqs.set(acc, entry);
+  refQueue = refQueue.then(async () => {
+    try {
+      const q = new URLSearchParams({ db: "nuccore", id: acc, rettype: "fasta", retmode: "text" });
+      const r = await fetch(`${NCBI}?${q}`);
+      const text = await r.text();
+      if (!r.ok || !text.startsWith(">")) throw new Error(r.ok ? "not a FASTA record" : `HTTP ${r.status}`);
+      entry.seq = text.split("\n").filter(l => !l.startsWith(">")).join("").replace(/\s/g, "");
+      if (!entry.seq) throw new Error("an empty record");
+      entry.status = "ok";
+      try { localStorage.setItem(REF_LS + acc, entry.seq); } catch {}
+    } catch (e) {
+      entry.status = "failed";
+      entry.error = e.message || String(e);
+    }
+    refVersion++;
+    if (app.state.view === "res-sequences") app.render();
+    await new Promise(res => setTimeout(res, 400));
+  });
+  return entry;
+}
+
+const FEATURE = { fwd: "forward primer", rev: "reverse primer", probe: "probe" };
+const FEATURE_CLASS = { fwd: "pf", rev: "pr", probe: "pp" };
+
+/* The reference line: its bases, a gap where a sample has an insertion, and
+   the primers and probe as highlighted runs — a base of one that doesn't match
+   the reference marked within it. */
+function refLine(ref) {
+  const at = new Array(ref.row.length).fill(null), mis = new Set();
+  for (const f of ref.features) {
+    for (let j = f.cols[0]; j <= f.cols[1]; j++) at[j] = f;
+    for (const j of f.misCols) mis.add(j);
+  }
+  let html = "";
+  for (let j = 0; j < ref.row.length;) {
+    const f = at[j];
+    let k = j;
+    while (k < ref.row.length && at[k] === f) k++;
+    let run = "";
+    for (let i = j; i < k; i++) {
+      const c = ref.row[i];
+      run += c === "-" ? `<span class="g">-</span>` : mis.has(i) ? `<span class="pm">${c}</span>` : c;
+    }
+    if (f) {
+      const strand = f.strand === 1 ? "" : ", on the reverse strand";
+      const fit = f.mismatches ? `${f.mismatches} mismatch${f.mismatches > 1 ? "es" : ""}` : "matches exactly";
+      html += `<span class="${FEATURE_CLASS[f.kind]}" title="${esc(ref.assay.label)} ${FEATURE[f.kind]}: `
+        + `${f.start + 1}–${f.end}${strand} — ${fit}">${run}</span>`;
+    } else html += run;
+    j = k;
+  }
+  return html;
+}
+
+// the ruler in the reference's own numbering; blank over an insertion
+function refRuler(position) {
+  let s = "";
+  for (const p of position) {
+    if (p === null) s += " ";
+    else if (p % 10 === 0) {
+      const n = String(p);
+      s = s.length >= n.length - 1 ? s.slice(0, s.length - n.length + 1) + n : s + "·";
+    } else s += p % 5 === 0 ? ":" : "·";
+  }
+  return s;
+}
 
 // the per-column states compare() returns, as the class each is drawn with
 const SEQ_CLASS = { " ": "o", "=": "m", "x": "x", "-": "d", "+": "i", ".": "g", "n": "n" };
@@ -634,23 +763,38 @@ function renderSequences(wrap, app) {
   const rows = app.state.rows["inv-pathogens"] || [];
   const want = app.state.spec["res-sequences"]?.Type || [];
   const hlKey = want.join("\n");
-  if (seqDrawn && seqDrawn.rows === rows && seqDrawn.dots === seqDots
-      && seqDrawn.hl === hlKey) return;
-  seqDrawn = { rows, dots: seqDots, hl: hlKey };
+  if (seqDrawn && seqDrawn.rows === rows && seqDrawn.dots === seqDots && seqDrawn.hl === hlKey
+    && seqDrawn.refs === refVersion && seqDrawn.primers === lab.primer) return;
+  seqDrawn = { rows, dots: seqDots, hl: hlKey, refs: refVersion, primers: lab.primer };
   const hl = new Set(want);
   let firstHl = null;
 
-  const groups = Sequences.analyze(rows);
+  // why a group is drawn against its consensus, where it is
+  const why = new Map();
+  const groups = Sequences.analyze(rows, {
+    reference(sp) {
+      const ref = referenceFor(sp);
+      if (!ref) { why.set(sp, `No RefSeq for ${sp} in species.csv, nor on any of its assays in primers.csv`); return null; }
+      const got = wantReference(ref.accession, app);
+      if (got.status === "loading") why.set(sp, `Fetching ${ref.accession} from NCBI…`);
+      if (got.status === "failed") why.set(sp, `Couldn't fetch ${ref.accession} from NCBI (${got.error})`);
+      if (got.status !== "ok") return null;
+      return { accession: ref.accession, seq: got.seq, designs: speciesDesigns(sp) };
+    },
+  });
   const n = groups.reduce((t, g) => t + g.members.length, 0);
   wrap.replaceChildren();
   wrap.insertAdjacentHTML("beforeend",
     `<h2>Sequences by species</h2><p class="sub">The ${n} sequences in <code>pathogens.csv</code>,
-     grouped by their declared <b>Species</b> and aligned within each group; each line is
-     coloured where it departs from the group's majority consensus —
+     grouped by their declared <b>Species</b> and aligned within each group against the species'
+     reference genome (its <code>RefSeq</code> in species.csv, fetched from NCBI), cut to the
+     amplicon. The reference line marks the assay's
+     <span class="aln-key"><span class="pf">primers</span> and <span class="pp">probe</span></span>;
+     each sample is coloured where it departs from the reference —
      <span class="aln-key"><span class="x">A</span> a different base,
      <span class="d">-</span> a deletion, <span class="i">A</span> an insertion</span>.
      Blank is overhang, where a read starts late or stops early; it isn't counted.
-     A group of one has nothing to differ from.</p>`);
+     A species with no reference to fetch is compared to its own majority consensus.</p>`);
   const opt = document.createElement("label");
   opt.className = "aln-opt";
   opt.innerHTML = `<input type="checkbox"${seqDots ? " checked" : ""}> Draw matching bases as dots`;
@@ -675,11 +819,21 @@ function renderSequences(wrap, app) {
   for (const g of groups) {
     const h = document.createElement("h2");
     h.textContent = g.species;
-    const many = g.members.length > 1;
+    const many = g.members.length > 1, ref = g.reference;
+    // with a reference even one sample has something to differ from
+    const cmp = many || !!ref;
     h.insertAdjacentHTML("beforeend", ` <span class="aln-sub">${g.members.length} `
-      + `sequence${many ? "s" : ""} · ${g.length} columns`
-      + (many ? ` · ${g.variable.length} variable` : "") + `</span>`);
+      + `sequence${many ? "s" : ""} · `
+      + (ref ? `${esc(ref.accession)} ${ref.start + 1}–${ref.end}` : `${g.length} columns`)
+      + (cmp ? ` · ${g.variable.length} variable` : "") + `</span>`);
     wrap.append(h);
+    const notes = [];
+    if (why.has(g.species)) notes.push(esc(why.get(g.species)) + " — compared to the consensus meanwhile.");
+    else if (ref && !referenceFor(g.species)?.own) notes.push(`species.csv has no RefSeq for ${esc(g.species)}, so this is `
+      + `${esc(ref.accession)}, the frame its assays are recorded against in primers.csv.`);
+    if (ref && !ref.assay) notes.push(`None of the ${esc(g.species)} designs in primers.csv has primers `
+      + `that bracket these sequences on ${esc(ref.accession)}, so none are marked.`);
+    if (notes.length) wrap.insertAdjacentHTML("beforeend", `<p class="sub aln-note">${notes.join(" ")}</p>`);
 
     const box = document.createElement("div");
     box.className = "aln";
@@ -696,8 +850,22 @@ function renderSequences(wrap, app) {
       box.append(div);
       return lab;
     };
-    line("", esc(ruler(g.length)), "ruler");
-    if (many) {
+    if (ref) {
+      line("", esc(refRuler(ref.position)), "ruler");
+      const acc = Object.assign(document.createElement("a"), {
+        href: "https://www.ncbi.nlm.nih.gov/nuccore/" + encodeURIComponent(ref.accession),
+        target: "_blank", rel: "noopener", textContent: ref.accession,
+        title: `${ref.accession} at NCBI — positions ${ref.start + 1}–${ref.end} shown`,
+      });
+      const label = [acc];
+      if (ref.assay) {
+        const t = Object.assign(document.createElement("span"), { className: "aln-type" });
+        t.append(defnLink(ref.assay.label, ["primers"], "the assay these were amplified with"));
+        label.push(" ", t);
+      }
+      line(label, refLine(ref), "cons ref");
+    } else line("", esc(ruler(g.length)), "ruler");
+    if (many && !ref) {
       // a consensus column is dimmed where fewer than half the reads cover it,
       // and bold where some read disagrees with it
       const variable = new Set(g.variable);
@@ -716,14 +884,16 @@ function renderSequences(wrap, app) {
         `${m.label} in pathogens.csv`);
       const lab = line([a, " ", Object.assign(document.createElement("span"),
         { className: "aln-type", textContent: r.Type || "" })],
-        many ? alnLine(m.aligned, d.states, seqDots) : esc(m.aligned));
-      if (many) {
+        cmp ? alnLine(m.aligned, d.states, seqDots) : esc(m.aligned));
+      if (cmp) {
         const pct = d.identity === null ? "—" : (d.identity * 100).toFixed(1) + "%";
         lab.insertAdjacentHTML("beforeend", `<span class="aln-id">${pct}</span>`);
+        // where the read sits, in the reference's numbering if there is one
+        const pos = j => ref ? ref.position.slice(0, j + 1).filter(Boolean).pop() ?? ref.start : j + 1;
         lab.title = `${m.label}: ${d.same} matching, ${d.subs} substituted, ${d.ins} inserted, `
-          + `${d.dels} deleted against the consensus`
+          + `${d.dels} deleted against ${ref ? ref.accession : "the consensus"}`
           + (d.unknown ? `, ${d.unknown} uncalled` : "")
-          + ` — ${m.seq.length} bp, columns ${d.span[0] + 1}–${d.span[1] + 1}`;
+          + ` — ${m.seq.length} bp, ${ref ? "positions" : "columns"} ${pos(d.span[0])}–${pos(d.span[1])}`;
       } else lab.title = `${m.label}: ${m.seq.length} bp`;
       if (hl.has(r.Type)) {
         lab.parentNode.classList.add("hl");
@@ -762,6 +932,9 @@ function ingest(tables) {
     if (s.Label) lab.source.set(s.Label, s.Source || "");
   }
   lab.tubes = new Set((tables["cdna.csv"]?.rows || []).map(r => r.Tube).filter(Boolean));
+  lab.speciesRef = new Map((tables["species.csv"]?.rows || [])
+    .filter(r => (r.Species || "").trim() && (r.RefSeq || "").trim())
+    .map(r => [r.Species.trim(), r.RefSeq.trim()]));
 
   /* A name that defines nothing in any of the three files is the one thing
      worth reporting — a typo, or a tube that was never written down. Failing to

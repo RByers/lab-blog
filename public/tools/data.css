@@ -93,4 +93,11 @@ td.sample.open { max-width: 26rem; white-space: normal; }
 .aln .d, .aln-key .d { background: light-dark(#fbd0ca, #5a1f18); color: light-dark(#8a2418, #ffb3a7); }
 .aln .i, .aln-key .i { background: light-dark(#cfe0fb, #1c3558); color: light-dark(#153e82, #b3cdf8); }
 .aln-seq .n { color: var(--ink-dim); font-style: italic; }
+/* the reference line's primers and probe; a base of one that doesn't match the
+   reference is struck through in the deletion colour */
+.aln .pf, .aln .pr, .aln-key .pf { background: light-dark(#cdeed6, #173f27); color: light-dark(#14532d, #b4ebc4); }
+.aln .pp, .aln-key .pp { background: light-dark(#e4dafb, #33255a); color: light-dark(#4c1d95, #d9caff); }
+.aln .pf, .aln .pr, .aln .pp { cursor: help; }
+.aln .pm { text-decoration: line-through light-dark(#c0392b, #ff8a7a) 2px; }
+.aln-note { margin: -4px 0 6px; font-style: italic; }
 .aln-key span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0 2px; border-radius: 2px; }

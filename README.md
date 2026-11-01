@@ -47,8 +47,11 @@ folds down to its name.
 - **Results** — every well × channel in `qPCR-results.csv`, gathered into runs
   and tinted by what the assay targets (darker = positive); every library in
   `sequencing.csv`, gathered into its run, including the ones that resolved
-  nothing; the `pathogens.csv` sequences aligned per species, each coloured
-  where it departs from the consensus (the alignment is `sequences.js`, which
+  nothing; the `pathogens.csv` sequences aligned per species against the
+  species' reference genome (fetched from NCBI by its `RefSeq` accession and
+  cached in the browser), with the primers and probe of the assay they were
+  amplified with marked on it, each sample coloured where it departs from the
+  reference (the alignment is `sequences.js`, which
   also runs under node — `npm test`); plus roll-ups per assay (how often it comes up positive, its usual
   and best Cq, its contamination history) and per sample (everything ever run
   against one swab), and a per-year summary.

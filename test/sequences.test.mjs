@@ -208,3 +208,69 @@ test("analyze: the differences from the consensus are the ones put in", () => {
   assert.deepEqual(d.map(x => [x.subs, x.dels, x.ins]),
     [[1, 0, 0], [0, 2, 0], [0, 0, 1], [1, 0, 0], [0, 0, 0]]);
 });
+
+/* ============================ against a reference ============================
+   A made-up genome: random flanks, then an amplicon of a forward primer site,
+   the sequence A, and a reverse primer site. The samples are A and variants
+   of it, primer-trimmed, the way pathogens.csv holds them. */
+function random(n, seed) {
+  let x = seed, s = "";
+  for (let i = 0; i < n; i++) { x = (x * 1103515245 + 12345) % 2147483648; s += "ACGT"[x >> 16 & 3]; }
+  return s;
+}
+const FWD = "CAAGCACTTCTGTTTCCCCG";
+const REV_SITE = "ACTACTTTGGGTGTCCGTGT";             // the reverse primer is its complement
+const GENOME = random(400, 7) + FWD + A + REV_SITE + random(400, 11);
+const AMP = 400;                                    // where the amplicon starts
+const DESIGN = { label: "X rc", fwd: FWD, rev: S.revcomp(REV_SITE), probe: A.slice(20, 38) };
+
+test("oligos: ambiguity codes, and the reverse complement", () => {
+  assert.equal(S.revcomp("ACGTRYN"), "NRYACGT");
+  assert.equal(S.oligo("acgu ry-x"), "ACGTRYN");
+  const hit = S.findOligo(GENOME, FWD.slice(0, 4) + "Y" + FWD.slice(5))[0];  // C is a Y
+  assert.deepEqual([hit.start, hit.strand, hit.mismatches], [AMP, 1, 0]);
+  const rev = S.findOligo(GENOME, DESIGN.rev)[0];
+  assert.deepEqual([rev.start, rev.strand], [AMP + 80, -1]);
+  const off = S.findOligo(GENOME, sub(FWD, 3, "T"))[0];
+  assert.deepEqual([off.mismatches, off.mis], [1, [AMP + 3]]);
+});
+
+test("placeAssay: the primers bracket the amplicon, the probe inside it", () => {
+  const at = S.placeAssay(GENOME, DESIGN);
+  assert.deepEqual([at.start, at.end, at.inner], [AMP, AMP + 100, [AMP + 20, AMP + 80]]);
+  assert.equal(at.probe.start, AMP + 40);
+  // the same, read off the other strand
+  const flipped = S.placeAssay(S.revcomp(GENOME), DESIGN);
+  assert.equal(flipped.end - flipped.start, 100);
+  assert.equal(S.placeAssay(GENOME, { fwd: B.slice(0, 20), rev: B.slice(30, 50) }), null);
+});
+
+test("analyze: a reference is cut to the amplicon, with its primers marked", () => {
+  const recs = [
+    { Sample: "S1", Species: "X", Sequence: A },
+    { Sample: "S2", Species: "X", Sequence: sub(A, 30, A[30] === "A" ? "C" : "A") },
+    { Sample: "S3", Species: "X", Sequence: A.slice(10) },
+  ];
+  const decoy = { label: "X other", fwd: B.slice(0, 20), rev: B.slice(40, 60) };
+  const g = S.analyze(recs, {
+    reference: sp => sp === "X" ? { accession: "NC_X", seq: GENOME, designs: [decoy, DESIGN] } : null,
+  })[0];
+  const ref = g.reference;
+  assert.equal(ref.assay.label, "X rc");
+  assert.deepEqual([ref.start, ref.end, ref.row], [AMP, AMP + 100, FWD + A + REV_SITE]);
+  assert.equal(ref.position[0], AMP + 1);                       // GenBank numbering
+  assert.deepEqual(ref.features.map(f => [f.kind, ...f.cols]),
+    [["fwd", 0, 19], ["rev", 80, 99], ["probe", 40, 57]]);
+  assert.deepEqual(g.members.map(m => [m.diff.subs, m.diff.identity]), [[0, 1], [1, 59 / 60], [0, 1]]);
+  assert.deepEqual(g.variable, [50]);
+  assert.equal(g.members[2].diff.span[0], 30);                  // starts 10 bp late
+});
+
+test("analyze: with no reference, or a reference the designs miss", () => {
+  const recs = [{ Sample: "S1", Species: "X", Sequence: A }];
+  assert.equal(S.analyze(recs, { reference: () => null })[0].consensus, A);
+  const g = S.analyze(recs, { reference: () => ({ accession: "NC_X", seq: GENOME, designs: [] }) })[0];
+  assert.equal(g.reference.assay, null);
+  assert.equal(g.reference.row, A);                             // just where the sample sits
+  assert.deepEqual(g.reference.features, []);
+});

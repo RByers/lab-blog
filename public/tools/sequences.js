@@ -181,8 +181,9 @@ function alignPair(a, b, opts) {
    sequence with the highest total against everything else, then repeatedly
    add whichever remaining sequence scores best against one already placed.
    Rows come back in the order the sequences were given, with `order` saying
-   the order they were added in. */
-function align(seqs, opts) {
+   the order they were added in. `first`, when given, is the index to start
+   from instead: a reference, which everything else is then laid against. */
+function align(seqs, opts, first) {
   const s = seqs.map(normalize), n = s.length;
   if (!n) return { rows: [], order: [], scores: [] };
   const score = Array.from({ length: n }, () => new Array(n).fill(0));
@@ -190,10 +191,13 @@ function align(seqs, opts) {
     for (let b = a + 1; b < n; b++)
       score[a][b] = score[b][a] = addToAlignment([s[a]], s[b], opts).score;
 
-  let first = 0, top = -Infinity;
-  for (let a = 0; a < n; a++) {
-    const t = score[a].reduce((x, y) => x + y, 0);
-    if (t > top) { top = t; first = a; }
+  if (!(first >= 0 && first < n)) {
+    let top = -Infinity;
+    first = 0;
+    for (let a = 0; a < n; a++) {
+      const t = score[a].reduce((x, y) => x + y, 0);
+      if (t > top) { top = t; first = a; }
+    }
   }
   const order = [first], placed = new Set(order);
   let rows = [s[first]];
@@ -276,11 +280,136 @@ function compare(row, cons) {
   return { states, span: s, ...n, identity: scored ? n.same / scored : null };
 }
 
+/* ============================ a reference ============================
+   A species can have a reference genome, and its samples read best against
+   that: one fixed sequence they are all compared to, with coordinates that
+   mean something, rather than a consensus that moves whenever a sample is
+   added. The reference is a whole genome, though, and the samples are one
+   amplicon of it, so before it can be a row of the alignment it is cut down to
+   that amplicon.
+
+   The amplicon is found from the primers, not from coordinates recorded beside
+   them: primers.csv quotes its positions against its own choice of accession,
+   which isn't always the species', while a primer can simply be looked for.
+   Primers are written 5'→3' with IUPAC ambiguity codes, so a forward primer
+   reads on the reference's strand and a reverse primer on its complement. */
+const IUPAC = {
+  A: "A", C: "C", G: "G", T: "T",
+  R: "AG", Y: "CT", S: "CG", W: "AT", K: "GT", M: "AC",
+  B: "CGT", D: "AGT", H: "ACT", V: "ACG", N: "ACGT",
+};
+const COMP = {
+  A: "T", C: "G", G: "C", T: "A", R: "Y", Y: "R", S: "S", W: "W",
+  K: "M", M: "K", B: "V", V: "B", D: "H", H: "D", N: "N",
+};
+// An oligo as written, uppercase, keeping its ambiguity codes.
+const oligo = s => String(s ?? "").toUpperCase().replace(/[^A-Z]/g, "")
+  .replace(/U/g, "T").replace(/[^ACGTRYSWKMBDHVN]/g, "N");
+const revcomp = s => [...oligo(s)].reverse().map(c => COMP[c]).join("");
+// each code as a bit per base it allows, so "could these be the same" is a &
+const MASK = {};
+for (const [c, bases] of Object.entries(IUPAC))
+  MASK[c] = [...bases].reduce((m, b) => m | 1 << BASES.indexOf(b), 0);
+const masks = s => Uint8Array.from(s, c => MASK[c] ?? 15);
+
+/* Every place an oligo sits on `ref` with at most `maxMis` mismatches, on
+   either strand, fewest mismatches first: { start, end, strand, mismatches,
+   mis }, `end` exclusive and `mis` the reference positions that differ. */
+function findOligo(ref, probe, maxMis = 3) {
+  const o = oligo(probe), hits = [];
+  if (o.length < 8) return hits;
+  const r = masks(ref);
+  for (const [strand, s] of [[1, o], [-1, revcomp(o)]]) {
+    const q = masks(s), n = q.length;
+    for (let i = 0; i + n <= r.length; i++) {
+      let bad = 0;
+      for (let k = 0; k < n && bad <= maxMis; k++) if (!(q[k] & r[i + k])) bad++;
+      if (bad > maxMis) continue;
+      const mis = [];
+      for (let k = 0; k < n; k++) if (!(q[k] & r[i + k])) mis.push(i + k);
+      hits.push({ start: i, end: i + n, strand, mismatches: bad, mis });
+    }
+  }
+  return hits.sort((a, b) => a.mismatches - b.mismatches || a.start - b.start);
+}
+
+/* Where a design ({ fwd, rev, probe }) puts its amplicon on `ref`: a forward
+   and a reverse primer facing each other at most `maxLength` apart, the pair
+   with the fewest mismatches and then the shortest — either way round, since a
+   reference can run against the assay. The probe is looked for inside it.
+   { start, end, fwd, rev, probe } in reference coordinates, or null. */
+function placeAssay(ref, design, opts = {}) {
+  const maxMis = opts.maxMismatches ?? 3, maxLen = opts.maxLength ?? 3000;
+  // the best few dozen of each is plenty; a short degenerate primer can
+  // otherwise land in hundreds of places, and every pair would be tried
+  const F = findOligo(ref, design.fwd, maxMis).slice(0, 40);
+  const R = findOligo(ref, design.rev, maxMis).slice(0, 40);
+  let best = null;
+  for (const f of F) for (const r of R) {
+    if (f.strand === r.strand) continue;
+    const [a, b] = f.strand === 1 ? [f, r] : [r, f];     // a on the left
+    if (b.start < a.end || b.end - a.start > maxLen) continue;
+    const mis = f.mismatches + r.mismatches, len = b.end - a.start;
+    if (!best || mis < best.mis || (mis === best.mis && len < best.end - best.start))
+      best = { start: a.start, end: b.end, inner: [a.end, b.start], fwd: f, rev: r, mis };
+  }
+  if (!best) return null;
+  let probe = null;
+  if (oligo(design.probe)) {
+    const hit = findOligo(ref.slice(best.start, best.end), design.probe, maxMis)[0];
+    if (hit) probe = { ...hit, start: hit.start + best.start, end: hit.end + best.start,
+      mis: hit.mis.map(p => p + best.start) };
+  }
+  return { start: best.start, end: best.end, inner: best.inner,
+    fwd: best.fwd, rev: best.rev, probe };
+}
+
+/* Where a sequence sits on `ref`, as [start, end) in reference coordinates —
+   the same semi-global alignment, so the rest of the genome is free overhang. */
+function locate(ref, seq, opts) {
+  const { rows } = addToAlignment([ref], normalize(seq), opts);
+  const s = span(rows[1]);
+  if (!s) return null;
+  let pos = 0, start = 0, end = 0;
+  for (let j = 0; j <= s[1]; j++) {
+    if (j === s[0]) start = pos;
+    if (rows[0][j] !== GAP) pos++;
+  }
+  end = pos;
+  return [start, end];
+}
+
+/* Which design the sequences came from: the one whose amplicon *between* its
+   primers (pathogens.csv's sequences are primer-trimmed) best matches where
+   each sequence sits — overlap over union, averaged over the sequences. Null
+   when none matches them by half. */
+function chooseAssay(ref, spans, designs, opts) {
+  let best = null;
+  for (const d of designs || []) {
+    const at = placeAssay(ref, d, opts);
+    if (!at) continue;
+    const [lo, hi] = at.inner;
+    let fit = 0;
+    for (const [a, b] of spans) {
+      const over = Math.min(b, hi) - Math.max(a, lo);
+      if (over > 0) fit += over / (Math.max(b, hi) - Math.min(a, lo));
+    }
+    fit /= spans.length || 1;
+    if (fit >= 0.5 && (!best || fit > best.fit)) best = { design: d, ...at, fit };
+  }
+  return best;
+}
+
 /* ============================ the whole file ============================
    Records (CSV rows, or any objects) grouped by species, each group aligned
    and compared. Records with no sequence are left out, and a species with none
    left isn't a group. Groups come back largest first, then by name; members in
-   the order they were given. Field names default to pathogens.csv's. */
+   the order they were given. Field names default to pathogens.csv's.
+
+   `opts.reference(species)` may give a group its reference, as { accession,
+   seq, designs } — the genome, and the primer designs its samples might have
+   come from — and the group is then compared to that. Without one, it is
+   compared to its own majority consensus. */
 function analyze(records, opts = {}) {
   const f = { species: "Species", label: "Sample", sequence: "Sequence", ...opts.fields };
   const bySpecies = new Map();
@@ -293,29 +422,88 @@ function analyze(records, opts = {}) {
   }
   const groups = [];
   for (const [species, members] of bySpecies) {
-    const aln = align(members.map(m => m.seq), opts.scoring);
-    const cons = consensus(aln.rows);
-    members.forEach((m, k) => {
-      m.aligned = aln.rows[k];
-      m.diff = compare(m.aligned, cons.seq);
-    });
-    // a column is variable when some row that covers it disagrees with the call
-    const variable = [];
-    for (let j = 0; j < cons.seq.length; j++)
-      if (members.some(m => "x-+".includes(m.diff.states[j]))) variable.push(j);
-    groups.push({
-      species, members, order: aln.order,
-      consensus: cons.seq, depth: cons.depth, support: cons.support,
-      length: cons.seq.length, variable,
-    });
+    const ref = opts.reference?.(species);
+    groups.push(ref && normalize(ref.seq) ? againstReference(species, members, ref, opts)
+      : againstConsensus(species, members, opts));
   }
   return groups.sort((a, b) => b.members.length - a.members.length
     || a.species.localeCompare(b.species));
+}
+
+// a column is variable when some row that covers it disagrees with the call
+function variableColumns(members, L) {
+  const out = [];
+  for (let j = 0; j < L; j++)
+    if (members.some(m => "x-+".includes(m.diff.states[j]))) out.push(j);
+  return out;
+}
+
+function againstConsensus(species, members, opts) {
+  const aln = align(members.map(m => m.seq), opts.scoring);
+  const cons = consensus(aln.rows);
+  members.forEach((m, k) => {
+    m.aligned = aln.rows[k];
+    m.diff = compare(m.aligned, cons.seq);
+  });
+  return {
+    species, members, order: aln.order,
+    consensus: cons.seq, depth: cons.depth, support: cons.support,
+    length: cons.seq.length, variable: variableColumns(members, cons.seq.length),
+  };
+}
+
+/* The reference is cut to the amplicon of the design the samples fit, primers
+   included, and further wherever a sample runs past that; it goes into the
+   alignment first and every sample is compared to it. `position` is the
+   reference's own numbering (1-based, as GenBank's) at each column, null where
+   a sample has an insertion; `features` are the primers and probe, each with
+   the columns it spans. */
+function againstReference(species, members, ref, opts) {
+  const genome = normalize(ref.seq);
+  // The longest sequence is placed on the whole genome; the rest only need
+  // looking for near it, which on a 30 kb genome is most of the time saved.
+  const longest = members.reduce((a, m) => m.seq.length > a.seq.length ? m : a);
+  const at = locate(genome, longest.seq, opts.scoring);
+  const w0 = Math.max(0, at[0] - 1000), w1 = Math.min(genome.length, at[1] + 1000);
+  const near = genome.slice(w0, w1);
+  const spans = members.map(m => m === longest ? at
+    : locate(near, m.seq, opts.scoring)?.map(p => p + w0)).filter(Boolean);
+  const assay = chooseAssay(genome, spans, ref.designs, opts);
+  let start = Math.min(...spans.map(s => s[0])), end = Math.max(...spans.map(s => s[1]));
+  if (assay) { start = Math.min(start, assay.start); end = Math.max(end, assay.end); }
+
+  const aln = align([genome.slice(start, end), ...members.map(m => m.seq)], opts.scoring, 0);
+  const row = aln.rows[0];
+  members.forEach((m, k) => {
+    m.aligned = aln.rows[k + 1];
+    m.diff = compare(m.aligned, row);
+  });
+
+  const position = [], column = new Map();
+  for (let j = 0, p = start; j < row.length; j++) {
+    if (row[j] === GAP) { position.push(null); continue; }
+    column.set(p, j);
+    position.push(++p);
+  }
+  const features = [];
+  if (assay) for (const [kind, hit] of [["fwd", assay.fwd], ["rev", assay.rev], ["probe", assay.probe]]) {
+    if (!hit) continue;
+    features.push({ kind, start: hit.start, end: hit.end, strand: hit.strand,
+      mismatches: hit.mismatches, cols: [column.get(hit.start), column.get(hit.end - 1)],
+      misCols: hit.mis.map(p => column.get(p)) });
+  }
+  return {
+    species, members, order: aln.order.slice(1).map(k => k - 1),
+    reference: { accession: ref.accession, row, start, end, position, features,
+      assay: assay ? assay.design : null },
+    length: row.length, variable: variableColumns(members, row.length),
+  };
 }
 
 return {
   DEFAULTS, GAP,
   normalize, ungap, span, profile,
   addToAlignment, alignPair, align, consensus, compare, analyze,
+  oligo, revcomp, findOligo, placeAssay, locate, chooseAssay,
 };
 });
