@@ -99,5 +99,6 @@ td.sample.open { max-width: 26rem; white-space: normal; }
 .aln .pp, .aln-key .pp { background: light-dark(#e4dafb, #33255a); color: light-dark(#4c1d95, #d9caff); }
 .aln .pf, .aln .pr, .aln .pp { cursor: help; }
 .aln .pm { text-decoration: line-through light-dark(#c0392b, #ff8a7a) 2px; }
+.aln .pgap { box-shadow: inset 2px 0 light-dark(#c0392b, #ff8a7a); }
 .aln-note { margin: -4px 0 6px; font-style: italic; }
 .aln-key span { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; padding: 0 2px; border-radius: 2px; }

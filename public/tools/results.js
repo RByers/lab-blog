@@ -689,13 +689,25 @@ const FEATURE = { fwd: "forward primer", rev: "reverse primer", probe: "probe" }
 const FEATURE_CLASS = { fwd: "pf", rev: "pr", probe: "pp" };
 
 /* The reference line: its bases, a gap where a sample has an insertion, and
-   the primers and probe as highlighted runs — a base of one that doesn't match
-   the reference marked within it. */
+   the primers and probe as highlighted runs. Where one doesn't match the
+   reference, a wrong or extra reference base is struck through, and a base
+   the reference lacks is a bar before where it would go. */
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+function fitText(f) {
+  if (!f.mismatches) return "matches exactly";
+  return [
+    f.subs && plural(f.subs, "mismatched base", "mismatched bases"),
+    f.extra && plural(f.extra, "extra base", "extra bases") + " in the reference",
+    f.missing && plural(f.missing, "base", "bases") + " missing from the reference",
+  ].filter(Boolean).join(", ");
+}
+
 function refLine(ref) {
-  const at = new Array(ref.row.length).fill(null), mis = new Set();
+  const at = new Array(ref.row.length).fill(null), mis = new Set(), gap = new Set();
   for (const f of ref.features) {
     for (let j = f.cols[0]; j <= f.cols[1]; j++) at[j] = f;
     for (const j of f.misCols) mis.add(j);
+    for (const j of f.gapCols) gap.add(j);
   }
   let html = "";
   for (let j = 0; j < ref.row.length;) {
@@ -705,11 +717,12 @@ function refLine(ref) {
     let run = "";
     for (let i = j; i < k; i++) {
       const c = ref.row[i];
-      run += c === "-" ? `<span class="g">-</span>` : mis.has(i) ? `<span class="pm">${c}</span>` : c;
+      const cls = [c === "-" ? "g" : mis.has(i) ? "pm" : "", gap.has(i) ? "pgap" : ""].filter(Boolean).join(" ");
+      run += cls ? `<span class="${cls}">${c}</span>` : c;
     }
     if (f) {
       const strand = f.strand === 1 ? "" : ", on the reverse strand";
-      const fit = f.mismatches ? `${f.mismatches} mismatch${f.mismatches > 1 ? "es" : ""}` : "matches exactly";
+      const fit = fitText(f);
       html += `<span class="${FEATURE_CLASS[f.kind]}" title="${esc(ref.assay.label)} ${FEATURE[f.kind]}: `
         + `${f.start + 1}–${f.end}${strand} — ${fit}">${run}</span>`;
     } else html += run;

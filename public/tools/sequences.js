@@ -312,22 +312,49 @@ for (const [c, bases] of Object.entries(IUPAC))
   MASK[c] = [...bases].reduce((m, b) => m | 1 << BASES.indexOf(b), 0);
 const masks = s => Uint8Array.from(s, c => MASK[c] ?? 15);
 
-/* Every place an oligo sits on `ref` with at most `maxMis` mismatches, on
-   either strand, fewest mismatches first: { start, end, strand, mismatches,
-   mis }, `end` exclusive and `mis` the reference positions that differ. */
+/* Every place an oligo sits on `ref` with at most `maxMis` differences, on
+   either strand, fewest first. A difference is a mismatched base, a base the
+   reference has that the oligo doesn't, or one it lacks: an oligo against a
+   reference with one extra base in the middle is one difference, where
+   matching base-for-base would slide half of it along and count several.
+   It's edit distance with the reference's ends free (Sellers' algorithm).
+
+   { start, end, strand, mismatches, subs, extra, missing, mis, gaps }: `end`
+   exclusive, `mismatches` the total, `mis` the reference positions that are
+   wrong (a substituted base, or an extra one) and `gaps` the positions an
+   oligo base is missing before. */
 function findOligo(ref, probe, maxMis = 3) {
   const o = oligo(probe), hits = [];
   if (o.length < 8) return hits;
-  const r = masks(ref);
+  const r = masks(ref), L = r.length, W = L + 1;
   for (const [strand, s] of [[1, o], [-1, revcomp(o)]]) {
-    const q = masks(s), n = q.length;
-    for (let i = 0; i + n <= r.length; i++) {
-      let bad = 0;
-      for (let k = 0; k < n && bad <= maxMis; k++) if (!(q[k] & r[i + k])) bad++;
-      if (bad > maxMis) continue;
-      const mis = [];
-      for (let k = 0; k < n; k++) if (!(q[k] & r[i + k])) mis.push(i + k);
-      hits.push({ start: i, end: i + n, strand, mismatches: bad, mis });
+    const q = masks(s), m = q.length;
+    const D = new Uint8Array((m + 1) * W);           // row 0 is all 0: start anywhere
+    for (let i = 1; i <= m; i++) {
+      const row = i * W, up = row - W;
+      D[row] = i;
+      for (let j = 1; j <= L; j++)
+        D[row + j] = Math.min(D[up + j - 1] + (q[i - 1] & r[j - 1] ? 0 : 1),
+          D[up + j] + 1, D[row + j - 1] + 1);
+    }
+    // ends: each run of good-enough end points, at its best
+    const last = m * W;
+    for (let e = 1; e <= L; e++) {
+      const v = D[last + e];
+      if (v > maxMis || D[last + e - 1] <= v || (e < L && D[last + e + 1] < v)) continue;
+      // back to where it starts, preferring a match, then a missing base
+      const mis = [], gaps = [];
+      let i = m, j = e, subs = 0, extra = 0, missing = 0;
+      while (i > 0) {
+        const here = D[i * W + j], ok = j > 0 && (q[i - 1] & r[j - 1]);
+        if (j > 0 && here === D[(i - 1) * W + j - 1] + (ok ? 0 : 1)) {
+          if (!ok) { mis.push(j - 1); subs++; }
+          i--; j--;
+        } else if (here === D[(i - 1) * W + j] + 1) { gaps.push(j); missing++; i--; }
+        else { mis.push(j - 1); extra++; j--; }
+      }
+      hits.push({ start: j, end: e, strand, mismatches: v, subs, extra, missing,
+        mis: mis.reverse(), gaps: gaps.reverse() });
     }
   }
   return hits.sort((a, b) => a.mismatches - b.mismatches || a.start - b.start);
@@ -358,7 +385,7 @@ function placeAssay(ref, design, opts = {}) {
   if (oligo(design.probe)) {
     const hit = findOligo(ref.slice(best.start, best.end), design.probe, maxMis)[0];
     if (hit) probe = { ...hit, start: hit.start + best.start, end: hit.end + best.start,
-      mis: hit.mis.map(p => p + best.start) };
+      mis: hit.mis.map(p => p + best.start), gaps: hit.gaps.map(p => p + best.start) };
   }
   return { start: best.start, end: best.end, inner: best.inner,
     fwd: best.fwd, rev: best.rev, probe };
@@ -489,8 +516,10 @@ function againstReference(species, members, ref, opts) {
   if (assay) for (const [kind, hit] of [["fwd", assay.fwd], ["rev", assay.rev], ["probe", assay.probe]]) {
     if (!hit) continue;
     features.push({ kind, start: hit.start, end: hit.end, strand: hit.strand,
-      mismatches: hit.mismatches, cols: [column.get(hit.start), column.get(hit.end - 1)],
-      misCols: hit.mis.map(p => column.get(p)) });
+      mismatches: hit.mismatches, subs: hit.subs, extra: hit.extra, missing: hit.missing,
+      cols: [column.get(hit.start), column.get(hit.end - 1)],
+      misCols: hit.mis.map(p => column.get(p)),
+      gapCols: hit.gaps.map(p => column.get(p)).filter(j => j !== undefined) });
   }
   return {
     species, members, order: aln.order.slice(1).map(k => k - 1),

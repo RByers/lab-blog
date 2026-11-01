@@ -235,6 +235,20 @@ test("oligos: ambiguity codes, and the reverse complement", () => {
   assert.deepEqual([off.mismatches, off.mis], [1, [AMP + 3]]);
 });
 
+test("oligos: a base the reference adds or lacks is one difference, not a slide", () => {
+  // the probe against a genome with one extra base in the middle of its site
+  const probe = A.slice(20, 38);
+  const extra = random(200, 3) + A.slice(20, 29) + "T" + A.slice(29, 38) + random(200, 5);
+  const hit = S.findOligo(extra, probe)[0];
+  assert.deepEqual([hit.start, hit.end, hit.mismatches, hit.extra, hit.subs], [200, 219, 1, 1, 0]);
+  assert.equal(hit.mis.length, 1);
+  // and one missing
+  const short = random(200, 3) + A.slice(20, 29) + A.slice(30, 38) + random(200, 5);
+  const miss = S.findOligo(short, probe)[0];
+  assert.deepEqual([miss.start, miss.end, miss.mismatches, miss.missing], [200, 217, 1, 1]);
+  assert.deepEqual(miss.gaps.length, 1);
+});
+
 test("placeAssay: the primers bracket the amplicon, the probe inside it", () => {
   const at = S.placeAssay(GENOME, DESIGN);
   assert.deepEqual([at.start, at.end, at.inner], [AMP, AMP + 100, [AMP + 20, AMP + 80]]);
