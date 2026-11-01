@@ -36,6 +36,7 @@ const lab = {
   assay: new Map(),       // assays.csv Name
   speciesSet: new Set(),  // species.csv Species
   hasPathogen: new Set(), // pathogens.csv Sample
+  seqTypes: new Set(),    // pathogens.csv Type, of the rows with a Sequence
   // What the *other* tool's files actually contain. A link across to it is
   // only worth drawing if there is something on the other side, and these are
   // what say so — see hasWell / hasRun below.
@@ -382,7 +383,7 @@ const views = {
       { k: "Source",   t: T.narrow },
       { k: "Prob",     t: T.num, title: "Subjective probability it's a real infection (0–10)" },
       { k: "Species",  t: T.flag },
-      { k: "Type",     t: T.flag },
+      { k: "Type",     t: T.flag, title: "Links to this type in the Sequences alignment, where it has a sequence" },
       { k: "Seq",      t: T.flag, off: true, title: "Sequencing run(s) this sample appears in" },
       { k: "Symptoms", t: T.clip },
       { k: "Day",      t: T.num, title: "Day of illness when sampled" },
@@ -460,6 +461,20 @@ const views = {
               : e.cq);
           }
         }
+        return true;
+      }
+      // Type is joined from pathogens.csv with " + "; each one that has a
+      // sequence goes to the Sequences tab with its lines highlighted.
+      if (c.k === "Type" && val) {
+        const types = val.split(" + ");
+        if (!types.some(t => lab.seqTypes.has(t))) return false;
+        types.forEach((t, i) => {
+          if (i) td.append(" + ");
+          td.append(lab.seqTypes.has(t)
+            ? link(t, { tab: "res-sequences", spec: { Type: [t] } },
+                `${t} in the Sequences alignment`)
+            : t);
+        });
         return true;
       }
       if (c.k === "Seq" && val && lab.sequenced.has(row.Label)) {
@@ -962,6 +977,8 @@ function ingest(tables) {
   lab.assay = index(rows.assays, "Name");
   lab.speciesSet = new Set(rows.species.map(r => (r.Species || "").trim()).filter(Boolean));
   lab.hasPathogen = new Set(rows.pathogens.map(r => r.Sample).filter(Boolean));
+  lab.seqTypes = new Set(rows.pathogens
+    .filter(r => String(r.Sequence || "").trim()).map(r => r.Type).filter(Boolean));
 
   /* What the results tool's files hold, so a link over to it is only drawn
      where it lands on something. A `Confirmed+` call whose wells aren't in

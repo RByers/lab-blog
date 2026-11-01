@@ -595,7 +595,10 @@ function renderStats(wrap, app) {
    One block per species: a ruler, the consensus, then a line per sample with
    every base that differs from the consensus coloured and the rest dimmed (or,
    ticked, drawn as dots so the differences are all that's left). Blank is
-   overhang — that read hasn't started yet, or has stopped. */
+   overhang — that read hasn't started yet, or has stopped.
+
+   A link can ask for a `Type` (the Samples tab's Type column does): the lines
+   of that type are highlighted and the first is scrolled to. */
 let seqDots = false;
 let seqDrawn = null;           // what the pane holds now, so a re-render keeps its scroll
 
@@ -629,8 +632,13 @@ function ruler(L) {
 
 function renderSequences(wrap, app) {
   const rows = app.state.rows["inv-pathogens"] || [];
-  if (seqDrawn && seqDrawn.rows === rows && seqDrawn.dots === seqDots) return;
-  seqDrawn = { rows, dots: seqDots };
+  const want = app.state.spec["res-sequences"]?.Type || [];
+  const hlKey = want.join("\n");
+  if (seqDrawn && seqDrawn.rows === rows && seqDrawn.dots === seqDots
+      && seqDrawn.hl === hlKey) return;
+  seqDrawn = { rows, dots: seqDots, hl: hlKey };
+  const hl = new Set(want);
+  let firstHl = null;
 
   const groups = Sequences.analyze(rows);
   const n = groups.reduce((t, g) => t + g.members.length, 0);
@@ -651,6 +659,14 @@ function renderSequences(wrap, app) {
     app.render();
   });
   wrap.append(opt);
+  if (hl.size) {
+    const note = document.createElement("p");
+    note.className = "sub aln-hlnote";
+    note.append(`Highlighting ${want.join(", ")} · `);
+    const clear = link("clear", { tab: "res-sequences" }, "Stop highlighting");
+    note.append(clear);
+    wrap.append(note);
+  }
   if (!groups.length) {
     wrap.insertAdjacentHTML("beforeend", `<p class="sub">No row has a <code>Sequence</code>.</p>`);
     return;
@@ -709,9 +725,15 @@ function renderSequences(wrap, app) {
           + (d.unknown ? `, ${d.unknown} uncalled` : "")
           + ` — ${m.seq.length} bp, columns ${d.span[0] + 1}–${d.span[1] + 1}`;
       } else lab.title = `${m.label}: ${m.seq.length} bp`;
+      if (hl.has(r.Type)) {
+        lab.parentNode.classList.add("hl");
+        firstHl ||= lab.parentNode;
+      }
     }
     wrap.append(box);
   }
+  // after layout, so the pane is visible and has a size to scroll within
+  if (firstHl) requestAnimationFrame(() => firstHl.scrollIntoView({ block: "center" }));
 }
 
 /* ============================ ingest ============================ */

@@ -684,7 +684,9 @@ class App {
     s.q = addr.q;
     $("#q") && ($("#q").value = s.q);
     const v = s.view;
-    if (!this.names.includes(v)) return;      // a computed tab has no filters
+    // A computed tab has no filters, but it may still read what the link asked
+    // for — the Sequences tab highlights a Type — so the intent is kept as is.
+    if (!this.names.includes(v)) { s.spec[v] = addr.spec; return; }
     if (!Object.keys(addr.spec).length) {
       // An address with no filters means an unfiltered tab, not "leave what
       // was there" — otherwise a link into a tab lands on someone's old filter.
@@ -723,7 +725,7 @@ class App {
 
   syncAddr() {
     const s = this.state, v = s.view;
-    const addr = { tab: v, q: s.q, spec: this.names.includes(v) ? s.spec[v] : {} };
+    const addr = { tab: v, q: s.q, spec: s.spec[v] || {} };
     // replaceState rather than assigning location.hash: this runs on every
     // render, and a history entry per keystroke in the search box would make
     // Back useless. Following a link is the case that *should* push, and that
@@ -1642,6 +1644,7 @@ class App {
       else {
         const v = this.state.view;
         if (this.names.includes(v)) { this.state.filters[v] = {}; this.unspec(v); }
+        else this.state.spec[v] = {};
       }
       this.render();
     });

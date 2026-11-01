@@ -80,6 +80,9 @@ td.sample.open { max-width: 26rem; white-space: normal; }
 .aln-id { margin-left: auto; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .aln-seq { white-space: pre; padding: 0 10px; }
 .aln-row:hover .aln-lab, .aln-row:hover .aln-seq { background: var(--panel-2); }
+/* the lines a link asked for by Type: tinted, with a bar down the label edge */
+.aln-row.hl .aln-lab, .aln-row.hl .aln-seq { background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.aln-row.hl .aln-lab { box-shadow: inset 3px 0 0 var(--accent); font-weight: 600; }
 .aln-row.ruler { color: var(--ink-dim); border-bottom: 1px solid var(--line); }
 .aln-row.cons { font-weight: 600; border-bottom: 1px solid var(--line); }
 .aln-row.cons .aln-lab { color: var(--ink-dim); font-weight: 400; }
