@@ -644,22 +644,24 @@ function referenceFor(sp) {
 }
 
 /* ---- fetching a reference ----
-   One request per accession, one at a time (NCBI asks for no more than three a
-   second without a key), and the genome kept in localStorage: an accession
-   with a version is a fixed sequence, and the tab shouldn't wait on the
-   network every visit. */
-const NCBI = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi";
-const refSeqs = new Map();     // accession -> { status: "loading" | "ok" | "failed", seq, error }
+   One accession at a time (NCBI asks for no more than three requests a second
+   without a key): the genome, and its record summary for the organism and
+   title it is named by. Both kept in localStorage: an accession with a
+   version is a fixed sequence, and the tab shouldn't wait on the network
+   every visit. */
+const NCBI = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
+const refSeqs = new Map();     // accession -> { status: "loading" | "ok" | "failed", seq, organism, title, error }
 let refQueue = Promise.resolve();
 let refVersion = 0;            // bumped as each arrives, so the tab redraws
-const REF_LS = "lab-refseq:";
+const REF_LS = "lab-refseq2:";
+const pause = ms => new Promise(res => setTimeout(res, ms));
 
 function wantReference(acc, app) {
   if (refSeqs.has(acc)) return refSeqs.get(acc);
-  let cached = "";
-  try { cached = localStorage.getItem(REF_LS + acc) || ""; } catch {}
-  if (cached) {
-    refSeqs.set(acc, { status: "ok", seq: cached });
+  let cached = null;
+  try { cached = JSON.parse(localStorage.getItem(REF_LS + acc) || "null"); } catch {}
+  if (cached?.seq) {
+    refSeqs.set(acc, { status: "ok", ...cached });
     return refSeqs.get(acc);
   }
   const entry = { status: "loading" };
@@ -667,22 +669,44 @@ function wantReference(acc, app) {
   refQueue = refQueue.then(async () => {
     try {
       const q = new URLSearchParams({ db: "nuccore", id: acc, rettype: "fasta", retmode: "text" });
-      const r = await fetch(`${NCBI}?${q}`);
+      const r = await fetch(`${NCBI}efetch.fcgi?${q}`);
       const text = await r.text();
       if (!r.ok || !text.startsWith(">")) throw new Error(r.ok ? "not a FASTA record" : `HTTP ${r.status}`);
-      entry.seq = text.split("\n").filter(l => !l.startsWith(">")).join("").replace(/\s/g, "");
+      const lines = text.split("\n");
+      entry.title = lines[0].slice(1).replace(/^\S+\s*/, "");
+      entry.seq = lines.filter(l => !l.startsWith(">")).join("").replace(/\s/g, "");
       if (!entry.seq) throw new Error("an empty record");
+      // the summary's organism names the type where the title may not
+      // (`rhinovirus A47` for "Human rhinovirus 47 strain …"); without it the
+      // reference is still drawn, just labelled by accession
+      try {
+        await pause(400);
+        const s = await (await fetch(`${NCBI}esummary.fcgi?db=nuccore&retmode=json&id=${encodeURIComponent(acc)}`)).json();
+        const uid = s.result?.uids?.[0];
+        entry.organism = s.result?.[uid]?.organism || "";
+      } catch {}
       entry.status = "ok";
-      try { localStorage.setItem(REF_LS + acc, entry.seq); } catch {}
+      try { localStorage.setItem(REF_LS + acc, JSON.stringify(
+        { seq: entry.seq, title: entry.title, organism: entry.organism || "" })); } catch {}
     } catch (e) {
       entry.status = "failed";
       entry.error = e.message || String(e);
     }
     refVersion++;
     if (app.state.view === "res-sequences") app.render();
-    await new Promise(res => setTimeout(res, 400));
+    await pause(400);
   });
   return entry;
+}
+
+/* What a reference is called on the page: its type, in the lab's own
+   `<species>-<letter><number>` spelling where the species is a lettered one
+   and the record names a type of that letter — `HRV-A` with organism
+   `rhinovirus A47` is `HRV-A47` — and otherwise its accession. */
+function referenceName(sp, acc, got) {
+  const m = /^(.+-)([A-Z])$/.exec(sp);
+  const t = m && new RegExp(`\\b${m[2]}(\\d+)\\b`).exec(`${got.organism || ""} ${got.title || ""}`);
+  return t ? sp + t[1] : acc;
 }
 
 const FEATURE = { fwd: "forward primer", rev: "reverse primer", probe: "probe" };
@@ -792,7 +816,8 @@ function renderSequences(wrap, app) {
       if (got.status === "loading") why.set(sp, `Fetching ${ref.accession} from NCBI…`);
       if (got.status === "failed") why.set(sp, `Couldn't fetch ${ref.accession} from NCBI (${got.error})`);
       if (got.status !== "ok") return null;
-      return { accession: ref.accession, seq: got.seq, designs: speciesDesigns(sp) };
+      return { accession: ref.accession, seq: got.seq, designs: speciesDesigns(sp),
+        name: referenceName(sp, ref.accession, got), description: got.title || "" };
     },
   });
   const n = groups.reduce((t, g) => t + g.members.length, 0);
@@ -835,17 +860,19 @@ function renderSequences(wrap, app) {
     const many = g.members.length > 1, ref = g.reference;
     // with a reference even one sample has something to differ from
     const cmp = many || !!ref;
+    // the reference goes by its type; its accession and full title are a hover away
+    const refTip = ref ? `${ref.accession}${ref.description ? " — " + ref.description : ""}` : "";
     h.insertAdjacentHTML("beforeend", ` <span class="aln-sub">${g.members.length} `
       + `sequence${many ? "s" : ""} · `
-      + (ref ? `${esc(ref.accession)} ${ref.start + 1}–${ref.end}` : `${g.length} columns`)
+      + (ref ? `<span title="${esc(refTip)}">${esc(ref.name)}</span> ${ref.start + 1}–${ref.end}` : `${g.length} columns`)
       + (cmp ? ` · ${g.variable.length} variable` : "") + `</span>`);
     wrap.append(h);
     const notes = [];
     if (why.has(g.species)) notes.push(esc(why.get(g.species)) + " — compared to the consensus meanwhile.");
     else if (ref && !referenceFor(g.species)?.own) notes.push(`species.csv has no RefSeq for ${esc(g.species)}, so this is `
-      + `${esc(ref.accession)}, the frame its assays are recorded against in primers.csv.`);
+      + `${esc(ref.name)}, the frame its assays are recorded against in primers.csv.`);
     if (ref && !ref.assay) notes.push(`None of the ${esc(g.species)} designs in primers.csv has primers `
-      + `that bracket these sequences on ${esc(ref.accession)}, so none are marked.`);
+      + `that bracket these sequences on ${esc(ref.name)}, so none are marked.`);
     if (notes.length) wrap.insertAdjacentHTML("beforeend", `<p class="sub aln-note">${notes.join(" ")}</p>`);
 
     const box = document.createElement("div");
@@ -867,8 +894,8 @@ function renderSequences(wrap, app) {
       line("", esc(refRuler(ref.position)), "ruler");
       const acc = Object.assign(document.createElement("a"), {
         href: "https://www.ncbi.nlm.nih.gov/nuccore/" + encodeURIComponent(ref.accession),
-        target: "_blank", rel: "noopener", textContent: ref.accession,
-        title: `${ref.accession} at NCBI — positions ${ref.start + 1}–${ref.end} shown`,
+        target: "_blank", rel: "noopener", textContent: ref.name,
+        title: `${refTip} — at NCBI; positions ${ref.start + 1}–${ref.end} shown`,
       });
       const label = [acc];
       if (ref.assay) {
@@ -904,7 +931,7 @@ function renderSequences(wrap, app) {
         // where the read sits, in the reference's numbering if there is one
         const pos = j => ref ? ref.position.slice(0, j + 1).filter(Boolean).pop() ?? ref.start : j + 1;
         lab.title = `${m.label}: ${d.same} matching, ${d.subs} substituted, ${d.ins} inserted, `
-          + `${d.dels} deleted against ${ref ? ref.accession : "the consensus"}`
+          + `${d.dels} deleted against ${ref ? `${ref.name} (${ref.accession})` : "the consensus"}`
           + (d.unknown ? `, ${d.unknown} uncalled` : "")
           + ` — ${m.seq.length} bp, ${ref ? "positions" : "columns"} ${pos(d.span[0])}–${pos(d.span[1])}`;
       } else lab.title = `${m.label}: ${m.seq.length} bp`;

@@ -523,7 +523,8 @@ function againstReference(species, members, ref, opts) {
   }
   return {
     species, members, order: aln.order.slice(1).map(k => k - 1),
-    reference: { accession: ref.accession, row, start, end, position, features,
+    reference: { accession: ref.accession, name: ref.name || ref.accession,
+      description: ref.description || "", row, start, end, position, features,
       assay: assay ? assay.design : null },
     length: row.length, variable: variableColumns(members, row.length),
   };
