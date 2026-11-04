@@ -7,7 +7,8 @@ const sortedEssays = essays.filter((essay) => !essay.data.draft).sort((a, b) => 
 ---
 
 <BaseLayout title="Lab Notes">
-  <p>Welcome to my blog <a href="/about/">about my home molecular virology lab</a>. Below are my long-form essays. See also my <a href="/posts/">social media posts</a>.</p>
+  <p>Welcome to my blog <a href="/about/">about my home molecular virology lab</a>.<br>
+    Below are my long-form essays. Follow me <a href="https://bsky.app/profile/lab.rbyers.ca">on BlueSky</a> or see my <a href="/posts/">archived social media posts</a>.</p>
   {
     sortedEssays.map((essay) => (
       <article>
